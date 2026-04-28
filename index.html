@@ -485,13 +485,16 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
 
-// Convertit un path "collection/document" en référence Firestore
-// Convention : le premier segment = collection, le reste = document ID (avec __ comme séparateur)
+// Convertit un path en reference Firestore
+// - "numi_plan_chauffeurs"        -> collection "numiplan", doc "numi_plan_chauffeurs"
+// - "ntrack_config/logins"         -> collection "ntrack_config", doc "logins"
 function _pathToRef(path) {
-  var parts = path.split('/');
-  var col   = parts[0];
-  var docId = parts.slice(1).join('__') || '__root__';
-  return doc(db, col, docId);
+  var parts = path.split("/").filter(Boolean);
+  if (parts.length === 1) {
+    return doc(db, "numiplan", parts[0]);
+  } else {
+    return doc(db, parts[0], parts.slice(1).join("__"));
+  }
 }
 
 function _makeSnap(val) {
