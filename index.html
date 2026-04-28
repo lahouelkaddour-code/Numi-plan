@@ -3175,23 +3175,23 @@ function handleFileUpload(e) {
     const missions = [];
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(';').map(v => v.replace(/"/g, '').trim());
-      if (!values[0]) continue;
+      if (!values[1]) continue; // col 1 = SEGMENT obligatoire
       
       missions.push({
-        segment:    values[0],
-        tracking:   values[1],   // col 1 : TRACKING (PROVISOIRE/CHARGE/LIVRE/CLOTURE)
-        chauffeur:  values[20],
-        tracteur:   values[21],
-        remorque:   values[22],
-        ville_dep:  values[11],
-        ville_arriv: values[12],
-        km:         parseInt(values[15]) || 0,
-        ref_cmd:    values[5],
-        client:     values[4],
-        date:       values[16],  // col 16 : DT.DEP P (date départ prévue)
-        date_dep_p: values[16],  // alias explicite
-        date_arriv_p: values[17], // col 17 : DT.ARRIV P
-        achat:      values[35]   // col 35 : ACHAT (montant gain chauffeur)
+        segment:    values[1],   // col 1  : SEGMENT
+        tracking:   values[2],   // col 2  : ETAT SEG (AFFRETE/LIVRE/CLOTURE...)
+        chauffeur:  values[6],   // col 6  : COND 1 (nom chauffeur)
+        tracteur:   values[7],   // col 7  : TRACTEUR (immatriculation)
+        remorque:   values[16],  // col 16 : REMORQUE
+        ville_dep:  values[12],  // col 12 : VILLE DEP
+        ville_arriv: values[14], // col 14 : VILLE ARRIV
+        km:         parseFloat((values[17] || '0').replace(',', '.')) || 0, // col 17 : KM EXPLOITATION
+        ref_cmd:    values[8],   // col 8  : REF CMD
+        client:     values[10],  // col 10 : CLIENT
+        date:       values[0],   // col 0  : DT.DEP P (date départ prévue)
+        date_dep_p: values[0],   // alias explicite
+        date_arriv_p: values[0], // pas de date arrivée dans ce CSV
+        achat:      ''           // pas de colonne ACHAT dans ce CSV
       });
     }
     
@@ -3573,10 +3573,10 @@ function updateDriverHistory(missions) {
     if (camion.type === 'remorque' || camion.status !== 'actif' || !camion.objectif_km) {
       return;
     }
-    var camionId = (camion.id || '').trim();
-    // Matcher avec .trim() des deux côtés pour absorber les espaces CSV
+    var camionId = (camion.id || '').trim().toUpperCase();
+    // Matcher avec .trim().toUpperCase() des deux côtés pour absorber les espaces CSV
     var camionMissions = missions.filter(function(m) {
-      return (m.tracteur || '').trim() === camionId;
+      return (m.tracteur || '').trim().toUpperCase() === camionId;
     });
     camion.km_actuel = camionMissions.reduce(function(s,m){ return s+(m.km||0); }, 0);
     camion.ot_actuel = camionMissions.length;
@@ -3596,14 +3596,18 @@ function updateDriverHistory(missions) {
   STATE.chauffeurs.forEach(chauffeur => {
     // Récupérer les camions du chauffeur
     const vehicules = STATE.camions.filter(c => c.chauffeur === chauffeur.nom && !c.type);
-    const matricules = vehicules.map(v => v.id);
+    const matricules = vehicules.map(v => (v.id || '').trim().toUpperCase());
     
-    if (matricules.length === 0) {
-      return; // Pas de camion = pas de mission
-    }
+    // Normaliser le nom du chauffeur pour comparaison
+    const nomNorm = (chauffeur.nom || '').trim().toUpperCase();
     
-    // Trouver les missions de ce chauffeur
-    const driverMissions = missions.filter(m => matricules.includes(m.tracteur));
+    // Trouver les missions : par tracteur OU par nom chauffeur (CSV contient les deux)
+    const driverMissions = missions.filter(m => {
+      const tracteurNorm = (m.tracteur || '').trim().toUpperCase();
+      const chauffeurNorm = (m.chauffeur || '').trim().toUpperCase();
+      return (matricules.length > 0 && matricules.includes(tracteurNorm))
+          || (nomNorm && chauffeurNorm === nomNorm);
+    });
     
     if (driverMissions.length > 0) {
       updated++;
