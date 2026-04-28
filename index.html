@@ -463,117 +463,110 @@ border-left:4px solid var(--acc);margin-bottom:16px;
 
 </style>
 
-  <!-- ═══════ FIREBASE SDK ═══════ -->
-  <script>
+  <!-- ═══════ FIREBASE SDK (Firestore) ═══════ -->
+  <script type="module">
 // =============================================
-//  NUMILOG LOCAL STORAGE ENGINE
-//  localStorage + BroadcastChannel
+//  NUMILOG FIRESTORE ENGINE
+//  Connexion réelle à Cloud Firestore
 // =============================================
-(function() {
-  var _bc = null;
-  try { _bc = new BroadcastChannel('numilog_sync'); } catch(e) {}
-  var _snapListeners = {};
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  function _notify(key, val) {
-    var ls = _snapListeners[key] || [];
-    ls.forEach(function(cb) { try { cb(_makeSnap(key, val)); } catch(e) {} });
-  }
+const firebaseConfig = {
+  apiKey: "AIzaSyDA-loDmlfcdPC0es0sb6tiCM4JXP2VF24",
+  authDomain: "numi-pro.firebaseapp.com",
+  projectId: "numi-pro",
+  storageBucket: "numi-pro.firebasestorage.app",
+  messagingSenderId: "438168275921",
+  appId: "1:438168275921:web:5c7e1f64931706610baef0",
+  measurementId: "G-DQEEKXEFHN"
+};
 
-  function _makeSnap(key, val) {
-    var hasData = val !== null && val !== undefined;
-    return {
-      exists: function() { return hasData; },
-      data:   function() { return val; }
-    };
-  }
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
 
-  function _lsKey(path) {
-    return 'nlg__' + path.replace(/\//g, '__');
-  }
+// Convertit un path "collection/document" en référence Firestore
+// Convention : le premier segment = collection, le reste = document ID (avec __ comme séparateur)
+function _pathToRef(path) {
+  var parts = path.split('/');
+  var col   = parts[0];
+  var docId = parts.slice(1).join('__') || '__root__';
+  return doc(db, col, docId);
+}
 
-  function _lsRead(path) {
-    try {
-      var raw = localStorage.getItem(_lsKey(path));
-      if (raw === null) return null;
-      return JSON.parse(raw);
-    } catch(e) { return null; }
-  }
-
-  function _lsWrite(path, data) {
-    try {
-      localStorage.setItem(_lsKey(path), JSON.stringify(data));
-      return true;
-    } catch(e) { console.warn('localStorage write:', path, e); return false; }
-  }
-
-  // --- API publique ---
-  window.FIREBASE_OK = true;
-
-  window.fbWrite = async function(key, val) {
-    var obj = (typeof val === 'string') ? (() => { try { return JSON.parse(val); } catch(e) { return val; } })() : val;
-    _lsWrite(key, obj);
-    _notify(key, obj);
-    if (_bc) _bc.postMessage({ key: key, val: obj });
-    return true;
+function _makeSnap(val) {
+  var hasData = val !== null && val !== undefined;
+  return {
+    exists: function() { return hasData; },
+    data:   function() { return val; }
   };
+}
 
-  window.fbRead = async function(key) {
-    return _lsRead(key);
-  };
+// Cache local pour éviter les re-renders inutiles
+var _cache = {};
 
-  window.fbListen = function(key, cb) {
-    if (!_snapListeners[key]) _snapListeners[key] = [];
-    _snapListeners[key].push(cb);
-    try { cb(_makeSnap(key, _lsRead(key))); } catch(e) {}
-    return function() {
-      _snapListeners[key] = (_snapListeners[key]||[]).filter(function(f){return f!==cb;});
-    };
-  };
+// --- API publique (même interface qu'avant) ---
+window.FIREBASE_OK = true;
 
-  window._fbSet = async function(path, data) {
-    _lsWrite(path, data);
-    _notify(path, data);
-    if (_bc) _bc.postMessage({ key: path, val: data });
-    return true;
-  };
+window.fbWrite = async function(key, val) {
+  var obj = (typeof val === 'string') ? (() => { try { return JSON.parse(val); } catch(e) { return val; } })() : val;
+  _cache[key] = obj;
+  await setDoc(_pathToRef(key), { _data: JSON.stringify(obj) });
+  return true;
+};
 
-  window._fbGet = async function(path) {
-    return _makeSnap(path, _lsRead(path));
-  };
+window.fbRead = async function(key) {
+  var snap = await getDoc(_pathToRef(key));
+  if (!snap.exists()) return null;
+  try { return JSON.parse(snap.data()._data); } catch(e) { return snap.data(); }
+};
 
-  window._fbSnap = function(path, cb) {
-    if (!_snapListeners[path]) _snapListeners[path] = [];
-    _snapListeners[path].push(cb);
-    try { cb(_makeSnap(path, _lsRead(path))); } catch(e) {}
-    return function() {
-      _snapListeners[path] = (_snapListeners[path]||[]).filter(function(f){return f!==cb;});
-    };
-  };
+window.fbListen = function(key, cb) {
+  var ref = _pathToRef(key);
+  var unsub = onSnapshot(ref, function(snap) {
+    var val = null;
+    if (snap.exists()) {
+      try { val = JSON.parse(snap.data()._data); } catch(e) { val = snap.data(); }
+    }
+    _cache[key] = val;
+    try { cb(_makeSnap(val)); } catch(e) {}
+  });
+  return unsub;
+};
 
-  window._fbWrite = async function(path, data) {
-    _lsWrite(path, data);
-    _notify(path, data);
-    if (_bc) _bc.postMessage({ key: path, val: data });
-    return true;
-  };
+window._fbSet = async function(path, data) {
+  _cache[path] = data;
+  await setDoc(_pathToRef(path), { _data: JSON.stringify(data) });
+  return true;
+};
 
-  if (_bc) {
-    _bc.onmessage = function(evt) {
-      var key = evt.data && evt.data.key;
-      var val = evt.data && evt.data.val;
-      if (!key) return;
-      // Normaliser la cle : '/' -> '__' pour matcher les listeners
-      var normKey = key.replace(/\//g, '__');
-      _lsWrite(key, val);
-      _notify(normKey, val);
-      // Notifier aussi avec la cle originale si differente
-      if (normKey !== key) _notify(key, val);
-    };
-  }
+window._fbGet = async function(path) {
+  var snap = await getDoc(_pathToRef(path));
+  if (!snap.exists()) return _makeSnap(null);
+  try { return _makeSnap(JSON.parse(snap.data()._data)); } catch(e) { return _makeSnap(snap.data()); }
+};
 
-  window.dispatchEvent(new Event('firebase_ready'));
-  console.log('[Numilog] Moteur local actif - localStorage + BroadcastChannel');
-})();
+window._fbSnap = function(path, cb) {
+  var ref = _pathToRef(path);
+  var unsub = onSnapshot(ref, function(snap) {
+    var val = null;
+    if (snap.exists()) {
+      try { val = JSON.parse(snap.data()._data); } catch(e) { val = snap.data(); }
+    }
+    _cache[path] = val;
+    try { cb(_makeSnap(val)); } catch(e) {}
+  });
+  return unsub;
+};
+
+window._fbWrite = async function(path, data) {
+  _cache[path] = data;
+  await setDoc(_pathToRef(path), { _data: JSON.stringify(data) });
+  return true;
+};
+
+window.dispatchEvent(new Event('firebase_ready'));
+console.log('[Numilog] Firestore connecté — projet numi-pro');
 </script>
 
   <div id="fb-banner" style="
