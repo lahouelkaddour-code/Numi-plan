@@ -3,94 +3,101 @@
 <head>
 
 
-<!-- Firebase Auth -->
-<script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
-  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-const firebaseConfig = {
-  apiKey: "AIzaSyDA-loDmlfcdPC0es0sb6tiCM4JXP2VF24",
-  authDomain: "numi-pro.firebaseapp.com",
-  projectId: "numi-pro",
-  storageBucket: "numi-pro.firebasestorage.app",
-  messagingSenderId: "438168275921",
-  appId: "1:438168275921:web:5c7e1f64931706610baef0"
-};
-const EMAIL_ROLES = {
-  'admin@numi.dz':    { role: 'admin',  team: null },
-  'equipe_a@numi.dz': { role: 'team',   team: 'equipe_a' },
-  'equipe_b@numi.dz': { role: 'team',   team: 'equipe_b' },
-  'equipe_c@numi.dz': { role: 'team',   team: 'equipe_c' },
-  'equipe_d@numi.dz': { role: 'team',   team: 'equipe_d' },
-  'equipe_e@numi.dz': { role: 'team',   team: 'equipe_e' },
-  'equipe_f@numi.dz': { role: 'team',   team: 'equipe_f' },
-  'equipe_g@numi.dz': { role: 'team',   team: 'equipe_g' },
-};
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-window._fbAuth = auth;
-document.documentElement.style.visibility = 'hidden';
-function injectLogoutBtn(email) {
-  if (document.getElementById('np-logout-btn')) return;
-  const btn = document.createElement('button');
-  btn.id = 'np-logout-btn';
-  btn.textContent = 'Deconnexion';
-  btn.style.cssText = 'position:fixed;bottom:20px;left:16px;z-index:99999;padding:8px 14px;background:#ef4444;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;';
-  btn.addEventListener('click', () => { if (confirm('Se deconnecter ?')) signOut(auth); });
-  document.body.appendChild(btn);
-}
-function showLoginOverlay() {
-  document.documentElement.style.visibility = 'visible';
-  if (document.getElementById('np-login-overlay')) return;
-  const ov = document.createElement('div');
-  ov.id = 'np-login-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;background:#0f172a;font-family:Outfit,sans-serif;';
-  ov.innerHTML = '<div style="background:#1e293b;border:1px solid #334155;border-radius:20px;padding:48px 40px;text-align:center;width:400px;">'
-    +'<div style="font-size:48px;margin-bottom:16px;">&#128667;</div>'
-    +'<h1 style="color:#f1f5f9;font-size:22px;font-weight:700;margin:0 0 4px;">NUMI-PLAN</h1>'
-    +'<p style="color:#64748b;font-size:13px;margin:0 0 28px;">Exploitation Transport</p>'
-    +'<input id="np-email" type="email" placeholder="Adresse e-mail" style="width:100%;box-sizing:border-box;padding:12px;background:#0f172a;border:1px solid #334155;border-radius:10px;color:#f1f5f9;font-size:14px;outline:none;margin-bottom:12px;">'
-    +'<input id="np-pwd" type="password" placeholder="Mot de passe" style="width:100%;box-sizing:border-box;padding:12px;background:#0f172a;border:1px solid #334155;border-radius:10px;color:#f1f5f9;font-size:15px;outline:none;margin-bottom:12px;">'
-    +'<div id="np-err" style="color:#ef4444;font-size:12px;margin-bottom:12px;min-height:18px;"></div>'
-    +'<button id="np-btn" style="width:100%;padding:13px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;">Connexion</button>'
-    +'</div>';
-  document.body.appendChild(ov);
-  const tryLogin = () => {
-    const email = document.getElementById('np-email').value.trim();
-    const pwd = document.getElementById('np-pwd').value;
-    const err = document.getElementById('np-err');
-    const btn = document.getElementById('np-btn');
-    if (!email||!pwd){err.textContent='Remplir tous les champs';return;}
-    btn.textContent='Connexion...'; btn.disabled=true;
-    signInWithEmailAndPassword(auth,email,pwd).catch(()=>{
-      btn.textContent='Connexion'; btn.disabled=false;
-      err.textContent='Email ou mot de passe incorrect';
-      document.getElementById('np-pwd').value='';
-    });
+<script>
+/* ═══ LOGIN AUTONOME NUMI-PLAN ═══ */
+(function() {
+  document.documentElement.style.visibility = 'hidden';
+
+  var PASSWORDS = {
+    admin:    'admin123',
+    equipe_a: 'equipeA123',
+    equipe_b: 'equipeB123',
+    equipe_c: 'equipeC123',
+    equipe_d: 'equipeD123',
+    equipe_e: 'equipeE123',
+    equipe_f: 'equipeF123',
+    equipe_g: 'equipeG123'
   };
-  document.getElementById('np-btn').addEventListener('click', tryLogin);
-  document.getElementById('np-pwd').addEventListener('keydown', e=>{if(e.key==='Enter')tryLogin();});
-  document.getElementById('np-email').addEventListener('keydown', e=>{if(e.key==='Enter')document.getElementById('np-pwd').focus();});
-}
-onAuthStateChanged(auth, user => {
-  if (user) {
-    const email = user.email.toLowerCase();
-    const p = EMAIL_ROLES[email] || { role: 'team', team: null };
-    window._PORTAL_ROLE = p.role; window._PORTAL_TEAM = p.team; window._PORTAL_EMAIL = email;
-    const ov = document.getElementById('np-login-overlay');
-    if (ov) { ov.style.transition='opacity .3s'; ov.style.opacity='0'; setTimeout(()=>ov.remove(),300); }
-    document.documentElement.style.visibility = 'visible';
-    if (document.body) injectLogoutBtn(email);
-    else document.addEventListener('DOMContentLoaded', ()=>injectLogoutBtn(email));
-    // Déclencher les permissions une fois le rôle connu
-    window.dispatchEvent(new Event('portal_auth_ready'));
-  } else {
-    window._PORTAL_ROLE = null; window._PORTAL_TEAM = null;
-    const lb = document.getElementById('np-logout-btn'); if (lb) lb.remove();
-    if (document.body) showLoginOverlay();
-    else document.addEventListener('DOMContentLoaded', showLoginOverlay);
+  var SESSION_KEY = 'np_auth';
+  var TTL_MS      = 8 * 60 * 60 * 1000;
+
+  function isAuth() {
+    try {
+      var d = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
+      return d && (Date.now() - d.t < TTL_MS);
+    } catch(e) { return false; }
   }
-});
+
+  if (isAuth()) {
+    try {
+      var d = JSON.parse(sessionStorage.getItem(SESSION_KEY));
+      window._PORTAL_ROLE = d.role || 'team';
+      window._PORTAL_TEAM = d.team || null;
+    } catch(e) {}
+    document.documentElement.style.visibility = 'visible';
+    return;
+  }
+
+  document.documentElement.style.visibility = 'visible';
+  document.addEventListener('DOMContentLoaded', function() {
+    var overlay = document.createElement('div');
+    overlay.id = 'np-login-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;background:var(--bg);font-family:Outfit,sans-serif;';
+    overlay.innerHTML = `
+      <div style="background:var(--bg2);border:1px solid var(--surf);border-radius:20px;padding:48px 40px;text-align:center;width:400px;box-shadow:0 25px 60px rgba(0,0,0,.6);">
+        <img src="data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCADhAOEDASIAAhEBAxEB/8QAHQABAAMBAQEBAQEAAAAAAAAAAAYHCAUEAwECCf/EADwQAAEDAwMCBQEFBgMJAAAAAAEAAgMEBREGEiEHExQiMUFRCBUjMkJhFjRxgZGxM2JyRFN0gpKhwcLE/8QAGwEBAAIDAQEAAAAAAAAAAAAAAAEEAgMFBgf/xAAsEQEAAgIBAwIFBAIDAAAAAAAAAQIDESEEEjFBUQUTcYGRImHB8BXxobHh/9oADAMBAAIRAxEAPwCmURF9NcQREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBEUi0ForUWt7pJQafoH1BgZ3KiXgMib7ZJIG44Ia3PJ+AHEYXvXHWbWnUQREzOoR1fmRkjI4Vj1E+h9E3q5WiawftJX2+Q07p6iX7maYOAkbtxhjGkOGQ1znHgOb+I9nS1PHrPXlvuOoLe61acfQVM1voaSE00VS+GJu+Nhi5aN7t+95JIbguPtVt1nbHfNZ7db37+vEf6ZxTfG+VQItqVvQnp/qHTcHdt09FWvjL466nY2mnAcct7kbAI3OA2glzc8H0JKzN1e6Xag6cXNrK/bW2qoftpLjE3ayQ4J2Pbk7H4BOMkEcgnBxq6T4pg6m3ZHFvaf4Z5MF6RufCCIiLpNIiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiIPrRU09bW09FSRmWpqZWQwxg8ve5wa1v8yQFauqtdjRFmPTnQT6dkVI5ou95bHmSurWOa5zo88CNrm7BnO5ox+EAugehLXLdr3LFDFJM+moqmrEMYJfL24nODG45y4gDjnlc/UFvqrVe6u31tJW0k8MhDoa2PZM0Hkbx8kYORwfUcFVclKZssVvzrnX7+/2/lnEzWNw8LiSS5ziSeSSeStV9MbbrLR3Sq03HQ1jnvNTcaVlxrvteVrG04Mbd8NK1g7h37RtzuAw04dnCoXojbbTd+rWm7dfG077fNV/eRzv2skcGOMbD87pAwbfzZx7rf7GtYwMY0Na0YAAwAFx/jnV/LmuLW/Wd+Fjpcfdu21RaU6m1upr/AGikcy62B/dkgmgqtPzuirntkLXYkOOwWtAdhxODIAcljgp3cdORal0XVaZ1ZEytimY6CSUEbpQD5JhgeSThruBw4ccYXeq4RUUstOZJYu4wt3xu2vbkerT7EKh+vfUa56Itlu8DFW0urJZ2ConbG8UM0cRy7h3keZGlg8uXsa/Bc0tAPCxUnqMsVwRqf7zvj+Vq09ld25Zh1nYKzSurLppyvO6ot9QYXPAwJG4BY8D2DmFrsf5lyVYn1D6godU9RXXuhibE2WhpmuA9XZibIHn5JEgb/wAgHsq7XuOmva+GtrxqZjlzLxEWmIaEr+iFuvfQaxap0lRSt1G63xVlVF35HitBYC9rWuJDX+7Q0AE8e4Ij300aE0vrem1Y/UdBJVut1PA+lLamSLYXibdnY4Z/A31z6fxVj3vWt00D9P8A0rv9r+8Amo4qqnJwKmA0kxfGT7Hygg+zmg8jIU80BZNMn9o+oGkahhtuq6KOeSBrMbJ2d7uO/QkyeZvs5rvnjzmTrc+PBeLTPMz2z6xq3Mfjx+FuuKlrRr7/AIYVicXU7Xn1LAf+yubrnoXTGl+neiLzZLe+mrbtA19bIamSQSEwsdw1ziG8knygeqpinGaWMf5B/ZaN+o9j63oT04u9K0y0UVPC2SVvIYX0zdufjlpH8ePUrt9Xe1eowxE6iZnf4V8cRNLbRroNoXS2q9Ba1ut9t8lTWWqEvo5G1MkYjPZe70Y4B3LQeQVTTDlgcfcZWi/poa6h6J9R7xVAxUL6eUMldw1xjp378fONwHHvws4vJZSuPu1n/hR0l7X6jNEzuImNfgyREUrLQ+ruiFA7oVZNWabo5mX6K109dc4u9JIKproWul2tJIa5pJcA0DIBGCSMQH6f+nTuousWw1TZBYqENmuErHFu8H8ELXDkF+DyOQ0OIIOFffVrXtT0uuvTYND3200k8Fzpm8l0LW07dzR7vafMPnBHG4rhaz13pLSNbp7R/S+poRFd79T3G61NDMHtbG+pYXRbgeC4Dbt/LG0NwAQuVg6rq7Ye2I3N9zE+0bne/p6fVutjxxb6eYU39QGlrVo7qhX2SyUz6a3MhhlgjdK6QtDoxu8ziSfMHHkqR/TNoTTGt/2tOpaCSs+zaamkpdtTJFsc/v7s7HDdntt9c+n6len6zKfs9XqeUek9mgf/ADEszf8A1C7v0Wemvv8AgqP/AOpW8ue/+MjJFp7tRz6+YYVpHz+3XHLOsLi+Fjj6loJ/orj6y6G0xpvpNoXUFnt76e43enhfWympkeJC6nDzhrnFrfMSeAP6Km6b92i/0D+y0P8AUc9jOgnS8vc1o8LTjJOP9jarnV3tXqMVazxMzv8ADXjiJpaZZ8Vs9Eullu1NZrhrPWdyfatKW0uDnsdtfUOaAXeYg4YMgcAlxJAwQqkY9jxljmuH6HK0jZ6Wo1V9GElq07E6orbdVPNXSxDc9+yq7zgAOS7Y5rwPU8AZOFHxHLfHjrFZ13TETPtE+qcNYmZmedQ5tuqvpnvtybp9lhvln7jhFBdJp5Wxlx4ByZXEZ+ZGAD3wq6609Oq3pvqptslqDWUFVGZqCqLdpkYDhzXD0D2kjOOCC08ZwIXb6Opu9dDa7ZTvra2rf2oKeIbnyOPsB/c+gGSeFob6wZo6PT+h9PVU7Ki7UtM987wckNDI2Fx/RzmnHzsPwtGrdN1OPHW82i29xM78R5ZcXpMzGtK66GdMZOol4q5K2tdbrFbWh9dVNwHEnJDGF3lBwCS45DRjjkKc09d9MxvUOnYdNXiqilkEJvD6t8cDecGRz3ztcGjk5DcY9AV7vpwiN/6D9QNJWl7Be5jMWR7tpe2WmayPn4LmPbn2UF6J2fpnc7i/Tev6e7xajqbk2kpKeMyxbAQ0bZAMbXb92c8rTmvbJkyze1oimtRXz48z7prEViuojn3/AOkW6rjSY13cHaIn71jdsMAETmBjg0B7RuAJG4Eg/r/NRZT7r/pWz6M6l1NhsUUsVFHTQytbLKZHbnNJPJ5UBXV6W1bYazWZmNR58/dpvExadiIi3sVgfTnd4bL1p05UVDwyGed9I5xPvLG5jB/N5YFqrrT0ls/Uijp5HVDbXdqZ33ddHTte57Mf4cg4Lm+48wwf4kHC0b5IpGyxSOjkY4OY9pw5rhyCD8grdvQ3qNS9Q9GRz9+Fl+o42xXKnxjbJjiQN/3b8EjHpy3OWlec+NY8uLJXqsU61xK5001tE47MO3qhktF8rbaamKeWhqpIDPTuOx7o3lu9h4OMjIKlln6r66o7/bLnX6svtXTUU0bpYBVn72EOBezB8pLmgjLgTz6qH3Opqa251dZWMYyqqKiSadrG7Wtkc4ucAMnABJ4zwvO2SaFwlp5DHMwh0bx6tcOQf6ru2xVyViLxEqkWmPD/AEugkbNBHM0ODXtDgHDBAIzyPYrB3XbXF11xrupqK1nYoaCWWlt1OPRsbZC1z8/mc5zOSOBtDfy5Vu9aOv8AbazREVl0XXVLrrcIGeMrYmvh8E0gFzWO4JkzxluQOec4Czxqm9VGoL1LcZ4Yqdm1sVPTRZ7dNCwBscTM+zWgc+5yTySuF8F6C+K05clde2/Mf7/vla6nLFv01lzXuc8gvcXEADJOeAMAf0X4iL0aom+rOo9w1F010/oaottLDS2N8T4amN7jJKY4nxDcDwMh5PHuF6OlvVfUPT+33G20MMFfb64ZNNUucGxSYwXsI9CRgEehwPjmMaintFVaLM63OdFWwUPhq2Lwoja6QSSO7u8OO8lr2N5AI2+p4XQ6i3WxXatt01gg8PDFQxRTQ+Dig2ytaA45jHnyecuyf1+KXycVqximn6Zmd+fP/rZ3Wie7fKKxtDI2sHIaAFZ/THrRqLRNjdp6Sgob7ZCXFlJWZBi3HJa1wz5SSTtLTyeMKMaMvtnstrvbLlZYbrUVbImUrJY4y1mBKHkucxxb+Nh8m1xLR5m4X7peu0pS6RvlDeaSqqLtXNDaOdlOxzaXtt3sIcXAgvkw12AfK39SsuorXLE0yU3G4/39kUma8xKT9TutOo9a2NunoaChsNk8vcpKPJMuDkNc44GwHB2ho5HJPoqxwDw4ZHuFLNP3vT1JoG7WevtYnutVJK+lqTTRPEXlhDAXEdwYLZCNrgAXch4JA5sd5iboaax9in8S+4RzCY0cReIQx+5nd29wZf2zjOMA+3BYKVw1mmOmo3/ZLTNp3Mu/1f6l3HqTW2ypuNtpKA2+KSONtO9zg4PLSSd3+kKGUNQ+jrqesjxvglZK3Py1wI/su9eLnZajQFgtlJD27rSPm8a4UcTRLullc13dA3uIa6NuCccenAJ9Wpr3pau0ZQ2+2WXwl4g8A2oqmxNa2dsVLIyUnHIeZX5J9HhrCQHN5nFEYqRjpTUbmP8Anz9y0zadzPL7dXeodd1HvVHdbhbKSgmpabw4FO9zg9u4uGc/BJ/qvr0m6lXHp029C32ykrfteKKKUzvc3tiPuYIx890+vwFzdQV+lKjRVkt1rpKqK80JzV1L4GNbU90F0mXBxc7tvDWsyB5SV+0N30/DrTTlyloA+2UUVA2vh8Ow950UbBMdp4ducHHJ/FnJWHysc4Pldn6eePpO4/Ke6e7u3yisbQyNrByGgBXbY/qIvVs03arG7SdlrIbbSRU0T53vLnCNgYHEegJA9lBbffdNjqhS32ptoZZAyMzU3hIXHf4QMe4xhrYnHvZecNa0nzBrc7RGb3NBUXmtqKVxdBLUSPjJibES0uJHkb5W8ewwB7YU5cOPqZiuWnpv7z6Iraac1lJuquvqnqBc6KvqbNQWt1JC6EMpM4eC7OTn3Xn6ca/1NoC6vr9PVbGtmAFRTTtL4JwPTc0EHIycEEEZPOCQf6mvFgd05p7R4Zsl2bEWbhbommOXxkkpmNSD3HgwObF2yNoxn8oz8vtLT37EeF8K/wC2fB+D/dGbc+NNR4ju7t27tns425wPXbwkY6Rj+V2fp3rX7e53Tvu3ytGf6lbu1k09t0RYKK5ytw+sL3PyfktDWk/zcqZ1NfbtqW+VN6vdbJWV1S7Mkj8eg9GgDhrQPQDhduS96dd0xisItY+3GS9w1hp4uR3nuI3gCTOwsHJLcAjaCA5fK4VulX9PaG10tNUNv8E/iJqo07Q2XeXB8W/fuLQ0QlvlwC2Q/n419PgxYJmcePU7178e/wBE2va3mXh0Zqi+aPv0V70/XPpKuMFruNzJWH1Y9p4c04HHyARggEXBH9SlwfJFV1+gbBVXKMDbWNkc0gj0IBa5w/6lW2or3pis6cWK0UFu7V8pJAauoFHGze377dmQed+d8OAfTYfTjPF1ZLaauC3S2h7o5hbYIKqI0wiDJ44mMc8ODjv3uDnE4B+ckqb9Nh6m0Tlx88x6+n09JIvakfpl6+our7nrnVdRqO7Q0kFTMxkfbpmuaxrWjDR5iSTj1OefgKPKT9T7rZL1qyWv07D2Lc9gEcPg4qbteZx27YwAQARyefYk4UYVrBERjrERr9vZhbzIiItqBdPSuoLzpe+QXuwV8tDXwZDZGYIc0+rHNPDmnAyDxwD6gEcxFjasWiYmNwROks1feNM6nE95ZbprDf5Xdyogph3KCqeT5nsBO+B5Jzt87Dj1aTlRNEUY8cY47Y8JmdiIizQIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIg//9k=" style="width:100px;border-radius:12px;margin-bottom:24px;">
+        <h1 style="color:#f1f5f9;font-size:22px;font-weight:700;margin:0 0 4px;">NUMI-PLAN</h1>
+        <p style="color:#64748b;font-size:13px;margin:0 0 28px;">Exploitation Transport · Connexion</p>
+
+        <select id="np-team"
+          style="width:100%;box-sizing:border-box;padding:12px 16px;background:var(--bg2);border:1px solid var(--surf);border-radius:10px;color:var(--txt);font-size:14px;outline:none;margin-bottom:12px;appearance:none;">
+          <option value="">— Sélectionner votre profil —</option>
+          <option value="admin">👤 Manager / Admin</option>
+          <option value="equipe_a">🚛 Équipe A</option>
+          <option value="equipe_b">🚛 Équipe B</option>
+          <option value="equipe_c">🚛 Équipe C</option>
+          <option value="equipe_d">🚛 Équipe D</option>
+          <option value="equipe_e">🚛 Équipe E</option>
+          <option value="equipe_f">🚛 Équipe F</option>
+          <option value="equipe_g">🚛 Équipe G</option>
+        </select>
+
+        <input id="np-pwd" type="password" placeholder="Mot de passe" autocomplete="off"
+          style="width:100%;box-sizing:border-box;padding:12px 16px;background:var(--bg2);border:1px solid var(--surf);border-radius:10px;color:var(--txt);font-size:15px;outline:none;margin-bottom:12px;">
+        <div id="np-err" style="color:#ef4444;font-size:12px;margin-bottom:12px;display:none;">❌ Profil ou mot de passe incorrect</div>
+        <button id="np-btn" style="width:100%;padding:13px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;">
+          Connexion
+        </button>
+        <p style="color:#374151;font-size:11px;margin-top:20px;">Session valide 8 heures</p>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    function tryLogin() {
+      var team = document.getElementById('np-team').value;
+      var pwd  = document.getElementById('np-pwd').value;
+      var err  = document.getElementById('np-err');
+      if (!team) { err.textContent = '❌ Veuillez sélectionner un profil'; err.style.display='block'; return; }
+      if (pwd === PASSWORDS[team]) {
+        var role = (team === 'admin') ? 'admin' : 'team';
+        var teamVal = (team === 'admin') ? null : team;
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({t:Date.now(), role:role, team:teamVal}));
+        window._PORTAL_ROLE = role;
+        window._PORTAL_TEAM = teamVal;
+        overlay.style.transition = 'opacity .3s';
+        overlay.style.opacity = '0';
+        setTimeout(function() { overlay.remove(); }, 300);
+      } else {
+        err.textContent = '❌ Mot de passe incorrect';
+        err.style.display = 'block';
+        document.getElementById('np-pwd').value = '';
+        document.getElementById('np-pwd').focus();
+      }
+    }
+
+    document.getElementById('np-btn').addEventListener('click', tryLogin);
+    document.getElementById('np-pwd').addEventListener('keydown', function(e) { if(e.key==='Enter') tryLogin(); });
+  });
+})();
 </script>
 
 
@@ -228,7 +235,7 @@ padding:20px 32px;display:flex;justify-content:space-between;align-items:center;
 }
 #exploitGrid .erp-table-header{
   display:grid;
-  grid-template-columns:4px 32px 280px 110px 160px 120px 110px 1fr;
+  grid-template-columns:4px 32px 220px 110px 160px 120px 110px 1fr;
   background:var(--bg3);border-bottom:2px solid var(--acc);
   border-radius:10px 10px 0 0;position:sticky;top:0;z-index:20;
 }
@@ -238,8 +245,8 @@ padding:20px 32px;display:flex;justify-content:space-between;align-items:center;
 .erp-th:first-child,.erp-th:nth-child(2){padding:0;border-right:none}
 #exploitGrid .driver-card{
   display:grid;
-  grid-template-columns:4px 32px 280px 110px 160px 120px 110px 1fr;
-  align-items:center;min-height:48px;
+  grid-template-columns:4px 32px 220px 110px 160px 120px 110px 1fr;
+  align-items:center;min-height:42px;
   background:var(--bg2);border-bottom:1px solid #e2e8f0;
   position:relative;cursor:pointer;transition:background 0.12s;
 }
@@ -259,10 +266,10 @@ padding:20px 32px;display:flex;justify-content:space-between;align-items:center;
 #exploitGrid .driver-card.status-panne:hover  {background:rgba(239,68,68,0.12)!important}
 .expand-icon{display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--txt3);transition:transform 0.2s;user-select:none;cursor:pointer;}
 #exploitGrid .driver-card.expanded .expand-icon{transform:rotate(90deg);color:var(--acc)}
-.dc-nom{padding:4px 10px;display:flex;flex-direction:column;justify-content:center;gap:1px;overflow:hidden}
+.dc-nom{padding:0 10px;display:flex;flex-direction:column;justify-content:center;gap:2px;overflow:hidden}
 .dc-name{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--txt)}
 .dc-site{font-size:10px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dc-veh {font-size:10px;color:var(--acc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.dc-veh {font-size:10px;color:var(--acc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dc-edit-btn{margin-left:6px;padding:1px 5px;background:var(--acc);border:none;border-radius:3px;color:#fff;cursor:pointer;font-size:9px}
 .dc-statut{display:flex;align-items:center;padding:0 10px}
 .dc-info{display:flex;flex-direction:column;justify-content:center;padding:0 10px;font-size:10px;overflow:hidden}
@@ -1036,18 +1043,15 @@ console.log('🚀 NUMI-PLAN - Démarrage du script...');
 console.log('📍 Étape 1: Lecture des paramètres URL');
 // Récupérer le rôle depuis l'URL (transmis par le portail)
 const urlParams = new URLSearchParams(window.location.search);
-// NB: _PORTAL_ROLE est défini par le module Firebase (async) — on le lit dynamiquement
-// pour éviter un problème de timing où la variable n'est pas encore définie
-const userRole = urlParams.get('role') || 'pending'; // valeur temporaire, remplacée dynamiquement
-const userTeam = urlParams.get('team') || null;
+const userRole = window._PORTAL_ROLE || urlParams.get('role') || 'team';
+const userTeam = window._PORTAL_TEAM || urlParams.get('team') || null;
 
 console.log('✅ URL Params lus:', {userRole, userTeam});
 console.log('📍 Étape 2: Définition des fonctions de permissions');
 
 // Fonction pour vérifier si l'utilisateur est admin
-// Lire _PORTAL_ROLE dynamiquement à chaque appel pour garantir la bonne valeur
 function isAdmin() {
-  return (window._PORTAL_ROLE || userRole) === 'admin';
+  return userRole === 'admin';
 }
 /* NTrack CSS */
 (function(){
@@ -1091,11 +1095,9 @@ function ntDeleteLogin(lid)      {}
 function ntResolveSignal(id)     {}
 
 // Fonction pour obtenir le nom de l'équipe formaté (A, B, C, etc.)
-// Lire _PORTAL_TEAM dynamiquement pour éviter le problème de timing avec le module Firebase
 function getTeamName() {
-  const team = window._PORTAL_TEAM || userTeam;
-  if (!team) return '';
-  return team.replace('equipe_', '').toUpperCase();
+  if (!userTeam) return '';
+  return userTeam.replace('equipe_', '').toUpperCase();
 }
 
 // Fonction pour obtenir l'équipe de l'utilisateur
@@ -1290,14 +1292,6 @@ function markImportByTeam() {
 window.addEventListener('DOMContentLoaded', function() {
   console.log('📍 Étape 3: DOMContentLoaded déclenché');
   
-  // NE PAS appliquer les permissions ici — Firebase (module async) n'a pas encore
-  // défini _PORTAL_ROLE. On attend l'événement 'firebase_ready'.
-  console.log('✅ DOM prêt, en attente de firebase_ready pour appliquer les permissions...');
-});
-
-// Les permissions sont appliquées une fois que Firebase a confirmé le rôle
-window.addEventListener('portal_auth_ready', function() {
-  console.log('📍 portal_auth_ready reçu — application des permissions (rôle confirmé par Firebase)');
   try {
     console.log('   → hideRestrictedMenus()...');
     hideRestrictedMenus();
@@ -1318,7 +1312,7 @@ window.addEventListener('portal_auth_ready', function() {
     addImportInfo();
     
     console.log('✅ Système de cloisonnement initialisé');
-    console.log('Role (Firebase):', window._PORTAL_ROLE);
+    console.log('Role:', userRole);
     console.log('Équipe:', getUserTeam());
     console.log('Admin:', isAdmin());
     console.log('Filtre auto:', STATE.currentTeam);
@@ -2434,9 +2428,9 @@ return '<div class="driver-card ' + statusClass + '" data-card-id="' + cardId + 
     + '</div>'
     + '<div class="dc-site">📍 ' + chauffeur.site + (chauffeur.equipe ? ' · 👥 Éq.' + chauffeur.equipe : '') + '</div>'
     + '<div class="dc-veh">🚛 ' + vehiculeInfo + '</div>'
-    + (chauffeur.barre_arrimage || chauffeur.cable_tir ? '<div class="dc-equip" style="display:flex;gap:4px;margin-top:1px;flex-wrap:nowrap">'
-      + (chauffeur.barre_arrimage ? '<span style="font-size:9px;padding:1px 4px;border-radius:3px;font-weight:700;background:' + (chauffeur.barre_arrimage==='OUI'?'rgba(52,211,153,0.15)':'rgba(248,113,113,0.15)') + ';color:' + (chauffeur.barre_arrimage==='OUI'?'var(--grn)':'var(--red)') + '" title="Barre arrimage">🔩' + chauffeur.barre_arrimage + '</span>' : '')
-      + (chauffeur.cable_tir ? '<span style="font-size:9px;padding:1px 4px;border-radius:3px;font-weight:700;background:' + (chauffeur.cable_tir==='OUI'?'rgba(52,211,153,0.15)':'rgba(248,113,113,0.15)') + ';color:' + (chauffeur.cable_tir==='OUI'?'var(--grn)':'var(--red)') + '" title="Cable de tir">🔗' + chauffeur.cable_tir + '</span>' : '')
+    + (chauffeur.barre_arrimage || chauffeur.cable_tir ? '<div class="dc-equip" style="font-size:10px;color:var(--txt3);margin-top:2px">'
+      + (chauffeur.barre_arrimage ? '<span style="color:' + (chauffeur.barre_arrimage==='OUI'?'var(--grn)':'var(--red)') + '" title="Barre arrimage">🔩' + chauffeur.barre_arrimage + '</span> ' : '')
+      + (chauffeur.cable_tir ? '<span style="color:' + (chauffeur.cable_tir==='OUI'?'var(--grn)':'var(--red)') + '" title="Câble de tir">🔗' + chauffeur.cable_tir + '</span>' : '')
       + '</div>' : '')
   + '</div>'
   + '<div class="dc-statut"><span class="badge badge-' + status.status + '">' + getStatusLabel(status.status) + (status.data.auto ? ' 🤖' : '') + '</span></div>'
@@ -2836,7 +2830,7 @@ ${tracteurs.length > 0 ? tracteurs.map(t => `
 <div style="background:var(--bg3);padding:8px 10px;border-radius:6px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
 <div style="flex:1">
 <div style="font-size:12px;font-weight:700;font-family:'Inter'">${t.id}</div>
-<div style="font-size:10px;color:var(--txt3);margin-top:1px">
+<div style="font-size:10px;color:var(--txt3);margin-top:2px">
 ${t.is_relais ? '🔄 Relais' : t.is_ext ? '🔗 Externe' : '🏢 Interne'} • 
 <span class="${t.status === 'actif' ? 'badge-dispo' : 'badge-panne'}" style="font-size:9px;padding:2px 6px">${t.status || 'inactif'}</span>
 ${t.remorque ? `<br>Remorque: ${t.remorque}` : ''}
@@ -2883,7 +2877,7 @@ ${tracteurs.length > 0 ? tracteurs.map(t => `
 <div style="background:var(--bg3);padding:10px 12px;border-radius:6px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
 <div>
 <div style="font-size:12px;font-weight:700;font-family:'Inter'">${t.id}</div>
-<div style="font-size:10px;color:var(--txt3);margin-top:1px">
+<div style="font-size:10px;color:var(--txt3);margin-top:2px">
 ${t.is_relais ? '🔄 Relais' : t.is_ext ? '🔗 Externe' : '🏢 Interne'} • 
 <span class="${t.status === 'actif' ? 'badge-dispo' : 'badge-panne'}" style="font-size:9px;padding:2px 6px">${t.status || 'inactif'}</span>
 ${t.remorque ? ` • Remorque: ${t.remorque}` : ''}
@@ -3183,23 +3177,23 @@ function handleFileUpload(e) {
     const missions = [];
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(';').map(v => v.replace(/"/g, '').trim());
-      if (!values[1]) continue; // col 1 = SEGMENT obligatoire
+      if (!values[0] || !values[21]) continue;
       
       missions.push({
-        segment:    values[1],   // col 1  : SEGMENT
-        tracking:   values[2],   // col 2  : ETAT SEG
-        chauffeur:  values[6],   // col 6  : COND 1
-        tracteur:   values[7],   // col 7  : TRACTEUR
-        remorque:   values[16],  // col 16 : REMORQUE
-        ville_dep:  values[12],  // col 12 : VILLE DEP
-        ville_arriv: values[14], // col 14 : VILLE ARRIV
-        km:         parseFloat((values[17] || '0').replace(',', '.')) || 0,
-        ref_cmd:    values[8],   // col 8  : REF CMD
-        client:     values[10],  // col 10 : CLIENT
-        date:       values[0],   // col 0 : DT.DEP P
-        date_dep_p: values[0],
-        date_arriv_p: values[0],
-        achat:      ''
+        segment:    values[0],
+        tracking:   values[1],   // col 1 : TRACKING (PROVISOIRE/CHARGE/LIVRE/CLOTURE)
+        chauffeur:  values[20],
+        tracteur:   values[21],
+        remorque:   values[22],
+        ville_dep:  values[11],
+        ville_arriv: values[12],
+        km:         parseInt(values[15]) || 0,
+        ref_cmd:    values[5],
+        client:     values[4],
+        date:       values[16],  // col 16 : DT.DEP P (date départ prévue)
+        date_dep_p: values[16],  // alias explicite
+        date_arriv_p: values[17], // col 17 : DT.ARRIV P
+        achat:      values[35]   // col 35 : ACHAT (montant gain chauffeur)
       });
     }
     
@@ -3604,16 +3598,14 @@ function updateDriverHistory(missions) {
   STATE.chauffeurs.forEach(chauffeur => {
     // Récupérer les camions du chauffeur
     const vehicules = STATE.camions.filter(c => c.chauffeur === chauffeur.nom && !c.type);
-    const matricules = vehicules.map(v => (v.id || '').trim().toUpperCase());
-    const nomNorm = (chauffeur.nom || '').trim().toUpperCase();
+    const matricules = vehicules.map(v => v.id);
     
-    // Trouver les missions : par tracteur OU par nom chauffeur
-    const driverMissions = missions.filter(m => {
-      const tracteurNorm = (m.tracteur || '').trim().toUpperCase();
-      const chauffeurNorm = (m.chauffeur || '').trim().toUpperCase();
-      return (matricules.length > 0 && matricules.includes(tracteurNorm))
-          || (nomNorm && chauffeurNorm === nomNorm);
-    });
+    if (matricules.length === 0) {
+      return; // Pas de camion = pas de mission
+    }
+    
+    // Trouver les missions de ce chauffeur
+    const driverMissions = missions.filter(m => matricules.includes(m.tracteur));
     
     if (driverMissions.length > 0) {
       updated++;
@@ -4921,7 +4913,7 @@ function buildDetailsRow(cardId, chauffeur, vehicule) {
   else if (!vehicule && chauffeur.derniere_mission) dm = chauffeur.derniere_mission;
   if (dm) blocks += '<div class="detail-block"><div class="detail-block-title">Derniere mission'+(vehicule?' ('+vehicule.id+')':'')+'</div><div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:4px">'+(dm.depart||'')+' &rarr; '+(dm.arrivee||'')+'</div><div style="display:flex;gap:10px;font-size:11px;color:var(--txt3)">'+(dm.date?'<span>'+dm.date.split(' ')[0]+'</span>':'')+'<span>'+(dm.km||0)+' km</span>'+(dm.duree_h?'<span>'+formatDuree(dm.duree_h)+'</span>':'')+'</div>'+(dm.ref?'<div style="font-size:10px;color:var(--txt3);margin-top:4px">'+dm.ref+'</div>':'')+'</div>';
   var creance=getCreance(chauffeur.nom);
-  if (creance!==null){var fmt=formatCreance(creance);if(fmt)blocks+='<div class="detail-block" style="max-width:180px"><div class="detail-block-title">Creance</div><div style="font-size:18px;font-weight:800;color:'+fmt.color+'">'+fmt.sign+fmt.montant+' DA</div><div style="font-size:10px;color:var(--txt3);margin-top:1px">'+(fmt.isPositive?'Solde positif':'Dette')+'</div></div>';}
+  if (creance!==null){var fmt=formatCreance(creance);if(fmt)blocks+='<div class="detail-block" style="max-width:180px"><div class="detail-block-title">Creance</div><div style="font-size:18px;font-weight:800;color:'+fmt.color+'">'+fmt.sign+fmt.montant+' DA</div><div style="font-size:10px;color:var(--txt3);margin-top:2px">'+(fmt.isPositive?'Solde positif':'Dette')+'</div></div>';}
   var cams=STATE.camions.filter(function(c){return c.chauffeur===chauffeur.nom&&c.status==='actif'&&!c.type;});
   if(cams.length){var lt=cams.reduce(function(s,c){return s+getLoyerCamion(c.id);},0);var n2=new Date(),mk=n2.getFullYear()+'-'+String(n2.getMonth()+1).padStart(2,'0');var nN=function(n){return(n||'').toUpperCase().replace(/[-']/g,' ').replace(/\s+/g,' ').trim();};var cL=function(n){var p=nN(n).split(' ').filter(Boolean);return p.length>=2?p.slice(1).join(' ')+' '+p[0]:nN(n);};var nr=nN(chauffeur.nom);var gt=STATE.missions.reduce(function(s,m){if(!m.chauffeur)return s;if(levenshtein(nN(m.chauffeur),nr)>2&&levenshtein(cL(m.chauffeur),nr)>2)return s;var d=m.date_dep_p||m.date||'',mm='';if(d.indexOf('/')!==-1){var p2=d.split('/');if(p2.length>=3)mm=p2[2].substring(0,4)+'-'+p2[1].padStart(2,'0');}else if(d.length>=7)mm=d.substring(0,7);if(mm&&mm!==mk)return s;return s+(parseFloat((m.achat||'0').toString().replace(',','.'))||0);},0);var r=gt-lt,pct=lt>0?Math.round(gt/lt*100):0;var cl=pct>=100?'#10b981':pct>=70?'#f59e0b':'#ef4444';var f2=function(n){return n.toLocaleString('fr-FR')+' DA';};blocks+='<div class="detail-block" style="max-width:220px"><div class="detail-block-title">Rentabilite mensuelle</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px"><div><div style="font-size:9px;color:var(--txt3)">Realise</div><div style="font-size:12px;font-weight:700;color:#60a5fa">'+f2(gt)+'</div></div><div><div style="font-size:9px;color:var(--txt3)">Loyer</div><div style="font-size:12px;font-weight:700;color:#f87171">'+f2(lt)+'</div></div></div><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:11px;font-weight:600;color:'+cl+'">'+(pct>=100?'Rentable':pct>=70?'En cours':'Insuffisant')+'</div><div style="font-size:22px;font-weight:800;color:'+cl+'">'+pct+'%</div></div><div style="height:4px;background:var(--bg3);border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;width:'+Math.min(pct,100)+'%;background:'+cl+';border-radius:2px"></div></div></div>';}
   if(chauffeur.mise_en_demeure){
@@ -5031,7 +5023,7 @@ function renderSignalements() {
   } else {
     actifs.forEach(function(s){
       html += '<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border-radius:8px;margin-bottom:6px;background:rgba(245,158,11,0.06);border-left:3px solid #f59e0b">'
-        +'<div style="font-size:18px;line-height:1;margin-top:1px">⚡</div>'
+        +'<div style="font-size:18px;line-height:1;margin-top:2px">⚡</div>'
         +'<div style="flex:1;min-width:0">'
           +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">'
             +'<span style="font-size:12px;font-weight:700;color:var(--txt)">'+s.chauffeur+'</span>'
@@ -5060,11 +5052,11 @@ function renderSignalements() {
         +'<div style="font-size:18px;line-height:1">📋</div>'
         +'<div style="flex:1">'
           +'<div style="font-size:12px;font-weight:700;color:var(--txt)">'+m.chauffeur+'</div>'
-          +(m.motif?'<div style="font-size:11px;color:var(--txt2);margin-top:1px">'+m.motif+'</div>':'')
+          +(m.motif?'<div style="font-size:11px;color:var(--txt2);margin-top:2px">'+m.motif+'</div>':'')
         +'</div>'
         +'<div style="font-size:10px;color:var(--txt3);white-space:nowrap;text-align:right">'
           +'<div>'+m.date_fr+'</div>'
-          +'<div style="margin-top:1px">Par '+m.declarePar+'</div>'
+          +'<div style="margin-top:2px">Par '+m.declarePar+'</div>'
         +'</div>'
       +'</div>';
     });
