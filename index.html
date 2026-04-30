@@ -313,6 +313,8 @@ padding:20px 32px;display:flex;justify-content:space-between;align-items:center;
 .change-team-btn{background:var(--bg3);border:none;width:32px;height:32px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--txt2);transition:all 0.2s}
 .change-team-btn:hover{background:var(--acc);color:#fff;transform:rotate(90deg)}
 .team-select-btn{padding:12px;background:var(--bg2);border:2px solid var(--bg3);border-radius:8px;cursor:pointer;font-weight:600;color:var(--txt1);transition:all 0.2s}
+.team-count{display:inline-block;background:rgba(255,255,255,0.25);color:inherit;font-size:10px;font-weight:700;padding:1px 5px;border-radius:10px;margin-left:5px;min-width:16px;text-align:center;line-height:16px;vertical-align:middle}
+.filter-chip.active .team-count{background:rgba(255,255,255,0.35)}
 .team-select-btn:hover:not(:disabled){background:var(--acc);color:#fff;border-color:var(--acc)}
 .team-select-btn.active{background:var(--bg3);color:var(--txt3);cursor:not-allowed}
 @keyframes slideIn{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -775,13 +777,13 @@ border-left:4px solid var(--acc);margin-bottom:16px;
 
 <div class="filter-bar">
 <div style="font-size:11px;color:var(--txt3);font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:10px 0">Équipes :</div>
-<div class="filter-chip" data-team="A">👥 A</div>
-<div class="filter-chip" data-team="B">👥 B</div>
-<div class="filter-chip" data-team="C">👥 C</div>
-<div class="filter-chip" data-team="D">👥 D</div>
-<div class="filter-chip" data-team="E">👥 E</div>
-<div class="filter-chip" data-team="F">👥 F</div>
-<div class="filter-chip" data-team="G">👥 G</div>
+<div class="filter-chip" data-team="A">👥 A<span class="team-count" id="team-count-A"></span></div>
+<div class="filter-chip" data-team="B">👥 B<span class="team-count" id="team-count-B"></span></div>
+<div class="filter-chip" data-team="C">👥 C<span class="team-count" id="team-count-C"></span></div>
+<div class="filter-chip" data-team="D">👥 D<span class="team-count" id="team-count-D"></span></div>
+<div class="filter-chip" data-team="E">👥 E<span class="team-count" id="team-count-E"></span></div>
+<div class="filter-chip" data-team="F">👥 F<span class="team-count" id="team-count-F"></span></div>
+<div class="filter-chip" data-team="G">👥 G<span class="team-count" id="team-count-G"></span></div>
 </div>
 
 <div class="cards-grid" id="exploitGrid"></div>
@@ -1319,6 +1321,7 @@ window.addEventListener('DOMContentLoaded', function() {
     console.log('Filtre auto:', STATE.currentTeam);
     
     console.log('🎉 NUMI-PLAN chargé avec succès !');
+  updateTeamCounts();
   } catch (error) {
     console.error('❌ ERREUR lors de l\'initialisation:', error);
     console.error('Stack:', error.stack);
@@ -1778,6 +1781,27 @@ function filterBySaturation(type) {
     }
   }
   renderExploitation();
+}
+
+
+// ── COMPTEURS CHAUFFEURS PAR ÉQUIPE ──
+function updateTeamCounts() {
+  if (!STATE.chauffeurs) return;
+  var teams = ['A','B','C','D','E','F','G'];
+  teams.forEach(function(team) {
+    var el = document.getElementById('team-count-' + team);
+    if (!el) return;
+    // Compter les chauffeurs UNIQUES (non démissionnaires) de cette équipe
+    var uniqueNames = new Set();
+    STATE.chauffeurs.forEach(function(c) {
+      if (!c.demission && c.equipe === team) {
+        uniqueNames.add(c.nom);
+      }
+    });
+    var count = uniqueNames.size;
+    el.textContent = count > 0 ? count : '';
+    el.style.display = count > 0 ? 'inline-block' : 'none';
+  });
 }
 
 function applyFilters() {
@@ -4676,6 +4700,7 @@ if (oldTeam === targetTeam) return;
 // Confirmation
 if (confirm(`Déplacer ${driver.nom} de l'équipe ${oldTeam} vers l'équipe ${targetTeam} ?`)) {
 driver.equipe = targetTeam;
+  updateTeamCounts();
 saveState();
 triggerAutoSave();
 renderEquipes();
@@ -4728,6 +4753,7 @@ if (!driver) return;
 
 const oldTeam = driver.equipe;
 driver.equipe = newTeam;
+  updateTeamCounts();
 saveState();
 triggerAutoSave();
 closeModal('changeTeamModal');
