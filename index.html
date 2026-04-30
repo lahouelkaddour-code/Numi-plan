@@ -792,6 +792,7 @@ border-left:4px solid var(--acc);margin-bottom:16px;
 <div id="page-chauffeurs" class="page">
 <div class="top">
 <div class="top-title">Gestion des chauffeurs</div>
+<button class="btn btn-blu" onclick="migrerCSRversFirebase()" style="font-size:11px;padding:6px 12px" title="Forcer l'écriture de la liste CSR vers Firebase">🔄 Forcer migration CSR</button>
 </div>
 <div class="content">
 <input type="text" class="search-box" id="searchChauffeurs" placeholder="🔍 Rechercher..." oninput="renderChauffeurs()">
@@ -2800,6 +2801,57 @@ signalement: ['Agressif', 'Refus d\'exécuter une tâche', 'Retard', 'Dégradati
 }
 
 // CHAUFFEURS
+
+// ══════════════════════════════════════════════
+// MIGRATION CSR → FIREBASE
+// ══════════════════════════════════════════════
+async function migrerCSRversFirebase() {
+  const nb = STATE.chauffeurs.length;
+  const nbC = STATE.camions.length;
+  if (!confirm(`⚠️ Cette action va écraser les données Firebase avec la liste actuelle :\n\n👥 ${nb} chauffeurs\n🚛 ${nbC} camions\n\nContinuer ?`)) return;
+
+  if (!window.FIREBASE_OK || !window.fbWrite) {
+    showToast('❌ Firebase non connecté', 'error');
+    return;
+  }
+
+  showToast('⏳ Migration en cours...');
+
+  try {
+    // Même format que save()
+    const chaufsStripped = STATE.chauffeurs.map(function(c) {
+      return {
+        id: c.id, nom: c.nom, site: c.site, tel: c.tel,
+        demission: c.demission || false,
+        mise_en_demeure: c.mise_en_demeure || false,
+        equipe: c.equipe || '',
+        barre_arrimage: c.barre_arrimage || '',
+        cable_tir: c.cable_tir || '',
+        tracteur_principal: c.tracteur_principal || '',
+        remorque_principale: c.remorque_principale || '',
+        vehicules: c.vehicules || [],
+        total_missions: c.total_missions || 0,
+        derniere_mission: c.derniere_mission || null
+      };
+    });
+
+    const chauffPayload = JSON.stringify({
+      chauffeurs: chaufsStripped,
+      camions: STATE.camions
+    });
+
+    await window.fbWrite('numi_plan_chauffeurs', chauffPayload);
+
+    // Mettre à jour localStorage aussi
+    try { localStorage.setItem('numi_plan_chauffeurs', chauffPayload); } catch(e) {}
+
+    showToast('✅ Migration réussie — ' + nb + ' chauffeurs & ' + nbC + ' camions écrits dans Firebase');
+  } catch(err) {
+    console.error('Migration error:', err);
+    showToast('❌ Erreur migration: ' + err.message, 'error');
+  }
+}
+
 function renderChauffeurs() {
 const search = document.getElementById('searchChauffeurs').value.toLowerCase();
 const chauffeurs = STATE.chauffeurs.filter(c => 
