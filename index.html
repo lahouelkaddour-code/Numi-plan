@@ -35,6 +35,10 @@
       window._PORTAL_TEAM = d.team || null;
     } catch(e) {}
     document.documentElement.style.visibility = 'visible';
+    // Session valide : rôle connu, on peut appliquer les permissions
+    document.addEventListener('DOMContentLoaded', function() {
+      window.dispatchEvent(new Event('portal_auth_ready'));
+    });
     return;
   }
 
@@ -83,6 +87,7 @@
         sessionStorage.setItem(SESSION_KEY, JSON.stringify({t:Date.now(), role:role, team:teamVal}));
         window._PORTAL_ROLE = role;
         window._PORTAL_TEAM = teamVal;
+        window.dispatchEvent(new Event('portal_auth_ready'));
         overlay.style.transition = 'opacity .3s';
         overlay.style.opacity = '0';
         setTimeout(function() { overlay.remove(); }, 300);
@@ -1051,7 +1056,7 @@ console.log('📍 Étape 2: Définition des fonctions de permissions');
 
 // Fonction pour vérifier si l'utilisateur est admin
 function isAdmin() {
-  return userRole === 'admin';
+  return (window._PORTAL_ROLE || userRole) === 'admin';
 }
 /* NTrack CSS */
 (function(){
@@ -1096,8 +1101,9 @@ function ntResolveSignal(id)     {}
 
 // Fonction pour obtenir le nom de l'équipe formaté (A, B, C, etc.)
 function getTeamName() {
-  if (!userTeam) return '';
-  return userTeam.replace('equipe_', '').toUpperCase();
+  const team = window._PORTAL_TEAM || userTeam;
+  if (!team) return '';
+  return team.replace('equipe_', '').toUpperCase();
 }
 
 // Fonction pour obtenir l'équipe de l'utilisateur
@@ -1288,39 +1294,24 @@ function markImportByTeam() {
   }
 }
 
-// Initialisation au chargement
-window.addEventListener('DOMContentLoaded', function() {
-  console.log('📍 Étape 3: DOMContentLoaded déclenché');
+// Initialisation des permissions — déclenchée par portal_auth_ready
+// (après que _PORTAL_ROLE soit garanti défini, que ce soit via session ou login)
+window.addEventListener('portal_auth_ready', function() {
+  console.log('📍 portal_auth_ready — application des permissions');
+  console.log('Role:', window._PORTAL_ROLE, '| Équipe:', window._PORTAL_TEAM);
   
   try {
-    console.log('   → hideRestrictedMenus()...');
     hideRestrictedMenus();
-    
-    console.log('   → displayUserRole()...');
     displayUserRole();
-    
-    console.log('   → blockRestrictedPages()...');
     blockRestrictedPages();
-    
-    console.log('   → filterTeamFilters()...');
     filterTeamFilters();
-    
-    console.log('   → applyTeamFilter()...');
     applyTeamFilter();
-    
-    console.log('   → addImportInfo()...');
     addImportInfo();
     
-    console.log('✅ Système de cloisonnement initialisé');
-    console.log('Role:', userRole);
-    console.log('Équipe:', getUserTeam());
-    console.log('Admin:', isAdmin());
-    console.log('Filtre auto:', STATE.currentTeam);
-    
+    console.log('✅ Permissions initialisées — Admin:', isAdmin(), '| Équipe:', getUserTeam());
     console.log('🎉 NUMI-PLAN chargé avec succès !');
   } catch (error) {
-    console.error('❌ ERREUR lors de l\'initialisation:', error);
-    console.error('Stack:', error.stack);
+    console.error('❌ ERREUR lors de l\'initialisation des permissions:', error);
   }
 });
 
