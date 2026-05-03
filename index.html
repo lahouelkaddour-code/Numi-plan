@@ -744,13 +744,7 @@ border-left:4px solid var(--acc);margin-bottom:16px;
 
 <div class="filter-bar">
 <div style="font-size:11px;color:var(--txt3);font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:10px 0">Équipes :</div>
-<div class="filter-chip" data-team="A">👥 A</div>
-<div class="filter-chip" data-team="B">👥 B</div>
-<div class="filter-chip" data-team="C">👥 C</div>
-<div class="filter-chip" data-team="D">👥 D</div>
-<div class="filter-chip" data-team="E">👥 E</div>
-<div class="filter-chip" data-team="F">👥 F</div>
-<div class="filter-chip" data-team="G">👥 G</div>
+<div id="teamFilterBtns"></div>
 </div>
 
 <div class="cards-grid" id="exploitGrid"></div>
@@ -1674,6 +1668,7 @@ STATE.currentTeam = null;
 document.querySelectorAll('.filter-chip[data-team]').forEach(c => c.classList.remove('active'));
 this.classList.add('active');
 STATE.currentTeam = this.dataset.team;
+renderTeamButtons();
 }
 }
 applyFilters();
@@ -1755,7 +1750,50 @@ renderExploitation();
 
 // EXPLOITATION
 var _reTimer = null;
+
+// ══ BOUTONS ÉQUIPES AVEC COMPTEUR ══
+function renderTeamButtons() {
+  const container = document.getElementById('teamFilterBtns');
+  if (!container) return;
+
+  // Compter chauffeurs actifs par équipe
+  const actifs = STATE.chauffeurs.filter(c => !c.demission);
+  const counts = {};
+  actifs.forEach(c => {
+    const eq = c.equipe || '?';
+    counts[eq] = (counts[eq] || 0) + 1;
+  });
+
+  // Équipes présentes triées
+  const equipes = [...new Set(actifs.map(c => c.equipe || '?'))].sort();
+
+  container.innerHTML = equipes.map(eq => {
+    const n = counts[eq] || 0;
+    const isActive = STATE.currentTeam === eq;
+    return '<div class="filter-chip' + (isActive ? ' active' : '') + '" data-team="' + eq + '" style="position:relative">'
+      + '👥 ' + eq
+      + '<span style="margin-left:5px;background:rgba(0,0,0,0.18);border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700">' + n + '</span>'
+      + '</div>';
+  }).join('');
+
+  // Réattacher les listeners
+  container.querySelectorAll('.filter-chip[data-team]').forEach(btn => {
+    btn.addEventListener('click', function() {
+      if (this.classList.contains('active')) {
+        this.classList.remove('active');
+        STATE.currentTeam = null;
+      } else {
+        container.querySelectorAll('.filter-chip[data-team]').forEach(c => c.classList.remove('active'));
+        this.classList.add('active');
+        STATE.currentTeam = this.dataset.team;
+      }
+      applyFilters();
+    });
+  });
+}
+
 function renderExploitation() {
+  renderTeamButtons();
   if (_reTimer) { return; } // throttle
   _reTimer = setTimeout(function(){ _reTimer = null; }, 200);
   _doRenderExploitation();
