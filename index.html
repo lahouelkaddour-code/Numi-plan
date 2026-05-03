@@ -755,7 +755,7 @@ border-left:4px solid var(--acc);margin-bottom:16px;
 <div id="page-chauffeurs" class="page">
 <div class="top">
 <div class="top-title">Gestion des chauffeurs</div>
-<button class="btn btn-blu" onclick="migrerCSRversFirebase()" style="font-size:11px;padding:6px 12px" title="Forcer l'écriture de la liste CSR vers Firebase">🔄 Forcer migration CSR</button>
+<button class="btn btn-grn" onclick="ouvrirAjoutChauffeur()" style="font-size:13px;padding:8px 18px">➕ Ajouter chauffeur</button>
 </div>
 <div class="content">
 <input type="text" class="search-box" id="searchChauffeurs" placeholder="🔍 Rechercher..." oninput="renderChauffeurs()">
@@ -2889,6 +2889,93 @@ async function migrerCSRversFirebase() {
     showToast('❌ Erreur: ' + err.message, 'error');
   }
 }
+
+
+// ══════════════════════════════════════════════
+// AJOUTER CHAUFFEUR AVEC CAMION
+// ══════════════════════════════════════════════
+function ouvrirAjoutChauffeur() {
+  var modal = document.createElement('div');
+  modal.className = 'modal show';
+  modal.id = 'modalAjoutChauffeur';
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = '<div class="modal-box" style="max-width:560px">'
+    + '<div class="modal-title">➕ Nouveau chauffeur équipé</div>'
+    + '<div class="form-group"><label class="form-label">Nom complet *</label>'
+    + '<input class="form-input" id="ac_nom" placeholder="Ex: BENALI Karim" style="text-transform:uppercase"></div>'
+    + '<div class="form-group"><label class="form-label">Site / Dépôt *</label>'
+    + '<input class="form-input" id="ac_site" placeholder="Ex: Alger, Oran, Constantine..."></div>'
+    + '<div class="form-group"><label class="form-label">Téléphone</label>'
+    + '<input class="form-input" id="ac_tel" placeholder="Ex: 0555 12 34 56" inputmode="tel"></div>'
+    + '<div class="form-group"><label class="form-label">Équipe</label>'
+    + '<select class="form-input" id="ac_equipe"><option value="">— Aucune équipe —</option>'
+    + ['a','b','c','d','e','f','g'].map(function(e){ return '<option value="equipe_'+e+'">Équipe '+e.toUpperCase()+'</option>'; }).join('')
+    + '</select></div>'
+    + '<hr style="border:none;border-top:1px solid var(--bg3);margin:8px 0 20px">'
+    + '<div style="font-size:13px;font-weight:800;color:var(--acc);margin-bottom:16px;text-transform:uppercase;letter-spacing:0.5px">🚛 Camion associé</div>'
+    + '<div class="form-group"><label class="form-label">Immatriculation tracteur *</label>'
+    + '<input class="form-input" id="ac_tracteur" placeholder="Ex: 001234-514-16" style="font-weight:700"></div>'
+    + '<div class="form-group"><label class="form-label">Type de camion</label>'
+    + '<select class="form-input" id="ac_type_camion">'
+    + '<option value="permanent">🏢 Camion permanent</option>'
+    + '<option value="externe">🔗 Camion externe</option>'
+    + '<option value="relais">🔄 Camion relais</option>'
+    + '</select></div>'
+    + '<div class="form-group"><label class="form-label">Matériel disponible</label>'
+    + '<div style="display:flex;gap:20px;padding:8px 0">'
+    + '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">'
+    + '<input type="checkbox" id="ac_barre" style="width:16px;height:16px;accent-color:var(--grn)"> 🔩 Barre d\'arrimage</label>'
+    + '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">'
+    + '<input type="checkbox" id="ac_cable" style="width:16px;height:16px;accent-color:var(--grn)"> 🔗 Câble de tir</label>'
+    + '</div></div>'
+    + '<div style="display:flex;gap:12px;margin-top:8px">'
+    + '<button class="btn btn-grn" onclick="sauvegarderNouveauChauffeur()">💾 Créer le chauffeur</button>'
+    + '<button class="btn btn-sec" onclick="document.getElementById(\'modalAjoutChauffeur\').remove()">Annuler</button>'
+    + '</div></div>';
+  document.body.appendChild(modal);
+  document.getElementById('ac_nom').focus();
+}
+
+async function sauvegarderNouveauChauffeur() {
+  var nom      = (document.getElementById('ac_nom').value || '').trim().toUpperCase();
+  var site     = (document.getElementById('ac_site').value || '').trim();
+  var tel      = (document.getElementById('ac_tel').value || '').trim();
+  var equipe   = (document.getElementById('ac_equipe').value || '');
+  var tracteur = (document.getElementById('ac_tracteur').value || '').trim();
+  var typeCam  = document.getElementById('ac_type_camion').value;
+  var barre    = document.getElementById('ac_barre').checked;
+  var cable    = document.getElementById('ac_cable').checked;
+
+  if (!nom)      { alert('Le nom est obligatoire'); return; }
+  if (!site)     { alert('Le site est obligatoire'); return; }
+  if (!tracteur) { alert('L\'immatriculation du tracteur est obligatoire'); return; }
+  if (STATE.chauffeurs.find(function(c){ return c.nom === nom && !c.demission; })) {
+    alert('Un chauffeur actif avec ce nom existe déjà'); return;
+  }
+  if (STATE.camions.find(function(c){ return c.id === tracteur; })) {
+    alert('Ce tracteur est déjà enregistré'); return;
+  }
+
+  var newId = 'c_' + Date.now();
+  STATE.chauffeurs.push({
+    id: newId, nom: nom, site: site, tel: tel, equipe: equipe,
+    demission: false, mise_en_demeure: false,
+    barre_arrimage: barre ? 'OUI' : 'NON',
+    cable_tir: cable ? 'OUI' : 'NON',
+    tracteur_principal: tracteur, remorque_principale: '',
+    vehicules: [], total_missions: 0, derniere_mission: null
+  });
+  STATE.camions.push({
+    id: tracteur, chauffeur: nom, type: null, status: 'actif',
+    is_relais: typeCam === 'relais', is_ext: typeCam === 'externe', remorque: ''
+  });
+
+  save();
+  document.getElementById('modalAjoutChauffeur').remove();
+  renderChauffeurs();
+  showToast('Chauffeur ' + nom + ' créé avec tracteur ' + tracteur);
+}
+
 
 function renderChauffeurs() {
 const search = document.getElementById('searchChauffeurs').value.toLowerCase();
