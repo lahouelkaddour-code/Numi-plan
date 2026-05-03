@@ -467,6 +467,7 @@ border-left:4px solid var(--acc);margin-bottom:16px;
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script>
+  (function() {
     var firebaseConfig = {
       apiKey: "AIzaSyDA-loDmlfcdPC0es0sb6tiCM4JXP2VF24",
       authDomain: "numi-pro.firebaseapp.com",
@@ -479,67 +480,74 @@ border-left:4px solid var(--acc);margin-bottom:16px;
     firebase.initializeApp(firebaseConfig);
     var db = firebase.firestore();
 
-    function _pathToRef(path) {
-      var parts = path.replace(/\//g, '/').split('/');
-      if (parts.length === 1) return db.collection('numiplan').doc(parts[0]);
-      return db.collection(parts[0]).doc(parts.slice(1).join('_'));
-    }
-
-    function _makeSnap(val) {
-      var hasData = val !== null && val !== undefined;
-      return { exists: function() { return hasData; }, data: function() { return val; } };
-    }
-
+    // Cache localStorage
     function _lsKey(k) { return 'nlg__' + k.replace(/\//g,'__'); }
     function _lsRead(k) { try { var r=localStorage.getItem(_lsKey(k)); return r?JSON.parse(r):null; } catch(e){return null;} }
     function _lsWrite(k,v) { try { localStorage.setItem(_lsKey(k), JSON.stringify(v)); } catch(e){} }
 
+    function _ref(key) {
+      var parts = key.split('/');
+      return parts.length === 1
+        ? db.collection('numiplan').doc(key)
+        : db.collection(parts[0]).doc(parts.slice(1).join('_'));
+    }
+
+    function _parse(raw) {
+      if (!raw) return null;
+      if (typeof raw === 'string') { try { return JSON.parse(raw); } catch(e) { return raw; } }
+      if (raw._data) { try { return JSON.parse(raw._data); } catch(e) { return raw._data; } }
+      return raw;
+    }
+
     window.FIREBASE_OK = true;
 
+    // Écriture Firestore + cache
     window.fbWrite = async function(key, val) {
-      var obj = (typeof val === 'string') ? (function(){ try { return JSON.parse(val); } catch(e) { return {_raw: val}; } })() : val;
-      _lsWrite(key, obj);
+      var str = typeof val === 'string' ? val : JSON.stringify(val);
+      _lsWrite(key, _parse(str));
       try {
-        await _pathToRef(key).set({ _data: typeof val === 'string' ? val : JSON.stringify(val), _ts: Date.now() });
-      } catch(e) { console.warn('[Firebase] write error:', key, e.message); }
+        await _ref(key).set({ _data: str, _ts: Date.now() });
+        console.log('[FB] ✅ write:', key);
+      } catch(e) { console.warn('[FB] write error:', key, e.message); }
       return true;
     };
 
+    // Lecture Firestore avec fallback cache
     window.fbRead = async function(key) {
       try {
-        var snap = await _pathToRef(key).get();
+        var snap = await _ref(key).get();
         if (snap.exists) {
-          var d = snap.data();
-          var parsed = d._data ? (function(){ try{return JSON.parse(d._data);}catch(e){return d._data;} })() : d;
+          var parsed = _parse(snap.data());
           _lsWrite(key, parsed);
           return parsed;
         }
-      } catch(e) { console.warn('[Firebase] read error:', key, e.message); }
+      } catch(e) { console.warn('[FB] read error:', key, e.message); }
       return _lsRead(key);
     };
 
+    // Listener temps réel
     window.fbListen = function(key, cb) {
-      return _pathToRef(key).onSnapshot(function(snap) {
-        var val = null;
-        if (snap.exists) {
-          var d = snap.data();
-          val = d._data ? (function(){ try{return JSON.parse(d._data);}catch(e){return d._data;} })() : d;
-          _lsWrite(key, val);
-        }
-        try { cb(_makeSnap(val)); } catch(e) {}
-      }, function(err) {
-        console.warn('[Firebase] listen error:', key, err.message);
-        try { cb(_makeSnap(_lsRead(key))); } catch(e) {}
-      });
+      return _ref(key).onSnapshot(
+        function(snap) {
+          var val = snap.exists ? _parse(snap.data()) : null;
+          if (val) _lsWrite(key, val);
+          try { cb({ exists: function(){ return !!val; }, data: function(){ return val; } }); } catch(e) {}
+        },
+        function(err) { console.warn('[FB] listen error:', key, err.message); }
+      );
     };
 
     window._fbSet   = window.fbWrite;
     window._fbWrite = window.fbWrite;
-    window._fbGet   = async function(path) { return _makeSnap(await window.fbRead(path)); };
-    window._fbSnap  = function(path, cb) { return window.fbListen(path, cb); };
+    window._fbGet   = async function(k) { var v = await window.fbRead(k); return { exists: function(){ return !!v; }, data: function(){ return v; } }; };
+    window._fbSnap  = window.fbListen;
 
-    window.dispatchEvent(new Event('firebase_ready'));
-    console.log('[Numilog] ✅ Firebase Firestore connecté — numi-pro');
+    // Dispatcher firebase_ready après un court délai pour laisser Firestore s'initialiser
+    setTimeout(function() {
+      window.dispatchEvent(new Event('firebase_ready'));
+      console.log('[Numilog] ✅ Firebase Firestore prêt — numi-pro');
+    }, 300);
+  })();
   </script>
 
   <div id="fb-banner" style="
@@ -1341,138 +1349,92 @@ const STORAGE_KEY = 'numi_plan_state';
 })();
 
 // Charger depuis Firebase dès qu'il est prêt, puis sync Numi-Flotte, puis réappliquer missions
-window.addEventListener('firebase_ready', async function() {
-  try {
-    // Charger les 3 documents Firebase en parallèle
-    const [snapState, snapChauff, snapMissions] = await Promise.all([
-      window.fbRead(STORAGE_KEY),
-      window.fbRead('numi_plan_chauffeurs'),
-      window.fbRead('numi_plan_missions_meta')
-    ]);
+window.addEventListener('firebase_ready', function() {
 
-    // Doc 1 : statuts + signalements + MED
-    if (snapState) {
-      const ls = typeof snapState === 'string' ? JSON.parse(snapState) : snapState;
-      STATE.status                  = ls.status                  || {};
-      STATE.pannes_historique       = ls.pannes_historique       || [];
-      STATE.signalements_historique = ls.signalements_historique || [];
-      STATE.med_historique          = ls.med_historique          || [];
-      STATE.currentFilter           = ls.currentFilter           || 'all';
-      STATE.currentTeam             = ls.currentTeam             || null;
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(ls)); } catch(e) {}
+  // ── Chargement initial depuis localStorage (instantané) ──
+  var cachedState  = (function(){ try{ var r=localStorage.getItem('nlg__'+STORAGE_KEY); return r?JSON.parse(r):null; }catch(e){return null;} })();
+  var cachedChauff = (function(){ try{ var r=localStorage.getItem('nlg__numi_plan_chauffeurs'); return r?JSON.parse(r):null; }catch(e){return null;} })();
+  var cachedMiss   = (function(){ try{ var r=localStorage.getItem('nlg__numi_plan_missions'); return r?JSON.parse(r):null; }catch(e){return null;} })();
+
+  if (cachedState) {
+    STATE.status                  = cachedState.status                  || {};
+    STATE.pannes_historique       = cachedState.pannes_historique       || [];
+    STATE.signalements_historique = cachedState.signalements_historique || [];
+    STATE.med_historique          = cachedState.med_historique          || [];
+  }
+  if (cachedChauff) {
+    if (cachedChauff.chauffeurs && cachedChauff.chauffeurs.length > 0) STATE.chauffeurs = cachedChauff.chauffeurs;
+    if (cachedChauff.camions    && cachedChauff.camions.length    > 0) STATE.camions    = cachedChauff.camions;
+  }
+  if (cachedMiss && Array.isArray(cachedMiss) && cachedMiss.length > 0) {
+    STATE.missions = cachedMiss;
+  }
+
+  STATE._firebaseLoaded = true;
+  renderExploitation();
+  if (typeof renderChauffeurs === 'function') renderChauffeurs();
+  console.log('[FB] Cache local appliqué — ' + STATE.chauffeurs.length + ' chauffeurs, ' + STATE.missions.length + ' missions');
+
+  // ── Listener temps réel : statuts / signalements ──
+  window.fbListen(STORAGE_KEY, function(snap) {
+    if (!snap.exists()) return;
+    var d = snap.data();
+    if (!d) return;
+    var ls = typeof d === 'string' ? JSON.parse(d) : d;
+    STATE.status                  = ls.status                  || STATE.status;
+    STATE.signalements_historique = ls.signalements_historique || STATE.signalements_historique;
+    STATE.pannes_historique       = ls.pannes_historique       || STATE.pannes_historique;
+    STATE.med_historique          = ls.med_historique          || STATE.med_historique;
+    if (STATE._firebaseLoaded && typeof renderExploitation === 'function') renderExploitation();
+    console.log('[Sync] Statuts mis à jour');
+  });
+
+  // ── Listener temps réel : chauffeurs / camions ──
+  window.fbListen('numi_plan_chauffeurs', function(snap) {
+    if (!snap.exists()) return;
+    var d = snap.data();
+    if (!d) return;
+    var lc = typeof d === 'string' ? JSON.parse(d) : d;
+    var changed = false;
+    if (lc.chauffeurs && lc.chauffeurs.length > 0) { STATE.chauffeurs = lc.chauffeurs; changed = true; }
+    if (lc.camions    && lc.camions.length    > 0) { STATE.camions    = lc.camions;    changed = true; }
+    if (changed && STATE._firebaseLoaded) {
+      if (typeof renderExploitation === 'function') renderExploitation();
+      if (typeof renderChauffeurs   === 'function') renderChauffeurs();
+      console.log('[Sync] Chauffeurs/camions mis à jour — ' + STATE.chauffeurs.length);
     }
+  });
 
-    // Doc 2 : chauffeurs + camions
-    if (snapChauff) {
-      const lc = typeof snapChauff === 'string' ? JSON.parse(snapChauff) : snapChauff;
-      if (lc.chauffeurs && lc.chauffeurs.length > 0) STATE.chauffeurs = lc.chauffeurs;
-      if (lc.camions    && lc.camions.length    > 0) STATE.camions    = lc.camions;
-      try { localStorage.setItem('numi_plan_chauffeurs', JSON.stringify(lc)); } catch(e) {}
-    }
-
-    // Doc 3 : missions en chunks
-    if (snapMissions) {
-      try {
-        var metaMissions = typeof snapMissions === 'string' ? JSON.parse(snapMissions) : snapMissions;
-        var totalChunks = metaMissions.chunks || 0;
-        if (totalChunks > 0) {
-          // Charger tous les chunks en parallèle
-          var chunkPromises = [];
-          for (var ci = 0; ci < totalChunks; ci++) {
-            chunkPromises.push(window.fbRead('numi_plan_missions_' + ci));
-          }
-          var chunkResults = await Promise.all(chunkPromises);
-          var allMissions = [];
-          chunkResults.forEach(function(cr) {
-            if (cr) {
-              var chunk = typeof cr === 'string' ? JSON.parse(cr) : cr;
-              if (Array.isArray(chunk)) allMissions = allMissions.concat(chunk);
-            }
-          });
-          if (allMissions.length > 0) {
-            STATE.missions = allMissions;
-            try { localStorage.setItem('numi_plan_missions', JSON.stringify(allMissions)); } catch(e) {}
-            console.log('✅ ' + allMissions.length + ' missions chargées depuis Firebase (' + totalChunks + ' chunks)');
-          }
-        }
-      } catch(eM) { console.warn('Missions chunks load error', eM); }
-    }
-    STATE._firebaseLoaded = true;
-  console.log('✅ Firebase chargé — ' + STATE.missions.length + ' missions, ' + STATE.chauffeurs.length + ' chauffeurs');
-
-    // Recalculer missions_historique depuis les missions (données dérivées)
-    if (STATE.missions && STATE.missions.length > 0 && typeof updateDriverHistory === 'function') {
-      updateDriverHistory(STATE.missions);
-    }
-
-    // ══ LISTENERS TEMPS RÉEL — sync automatique entre utilisateurs ══
-    // Écouter les changements de chauffeurs/camions
-    window.fbListen('numi_plan_chauffeurs', function(snap) {
-      if (!snap.exists()) return;
-      var d = snap.data();
-      if (!d) return;
-      var lc = typeof d === 'string' ? JSON.parse(d) : d;
-      var changed = false;
-      if (lc.chauffeurs && lc.chauffeurs.length > 0) {
-        STATE.chauffeurs = lc.chauffeurs;
-        changed = true;
-      }
-      if (lc.camions && lc.camions.length > 0) {
-        STATE.camions = lc.camions;
-        changed = true;
-      }
-      if (changed && typeof renderExploitation === 'function') {
-        renderExploitation();
-        if (typeof renderChauffeurs === 'function') renderChauffeurs();
-        console.log('[Sync] ✅ Chauffeurs/camions mis à jour en temps réel');
-      }
-    });
-
-    // Écouter les changements de statuts/signalements
-    window.fbListen(STORAGE_KEY, function(snap) {
-      if (!snap.exists()) return;
-      var d = snap.data();
-      if (!d) return;
-      var ls = typeof d === 'string' ? JSON.parse(d) : d;
-      STATE.status                  = ls.status                  || STATE.status;
-      STATE.signalements_historique = ls.signalements_historique || STATE.signalements_historique;
-      STATE.pannes_historique       = ls.pannes_historique       || STATE.pannes_historique;
-      if (typeof renderExploitation === 'function') {
-        renderExploitation();
-        console.log('[Sync] ✅ Statuts mis à jour en temps réel');
-      }
-    });
-
-    // Écouter les changements de missions (meta)
-    window.fbListen('numi_plan_missions_meta', function(snap) {
-      if (!snap.exists() || !STATE._firebaseLoaded) return;
-      var d = snap.data();
-      if (!d) return;
-      var meta = typeof d === 'string' ? JSON.parse(d) : d;
-      var totalChunks = meta.chunks || 0;
-      if (totalChunks === 0) return;
-      var promises = [];
-      for (var ci = 0; ci < totalChunks; ci++) {
-        promises.push(window.fbRead('numi_plan_missions_' + ci));
-      }
-      Promise.all(promises).then(function(results) {
-        var allMissions = [];
-        results.forEach(function(cr) {
-          if (cr) {
-            var chunk = typeof cr === 'string' ? JSON.parse(cr) : cr;
-            if (Array.isArray(chunk)) allMissions = allMissions.concat(chunk);
-          }
-        });
-        if (allMissions.length > 0) {
-          STATE.missions = allMissions;
-          if (typeof updateDriverHistory === 'function') updateDriverHistory(allMissions);
-          if (typeof renderExploitation === 'function') renderExploitation();
-          console.log('[Sync] ✅ Missions mises à jour en temps réel — ' + allMissions.length);
+  // ── Listener temps réel : missions ──
+  window.fbListen('numi_plan_missions_meta', function(snap) {
+    if (!snap.exists() || !STATE._firebaseLoaded) return;
+    var d = snap.data();
+    if (!d) return;
+    var meta = typeof d === 'string' ? JSON.parse(d) : d;
+    var totalChunks = meta.chunks || 0;
+    if (totalChunks === 0) return;
+    var promises = [];
+    for (var ci = 0; ci < totalChunks; ci++) promises.push(window.fbRead('numi_plan_missions_' + ci));
+    Promise.all(promises).then(function(results) {
+      var allMissions = [];
+      results.forEach(function(cr) {
+        if (cr) {
+          var chunk = typeof cr === 'string' ? JSON.parse(cr) : cr;
+          if (Array.isArray(chunk)) allMissions = allMissions.concat(chunk);
         }
       });
+      if (allMissions.length > 0) {
+        STATE.missions = allMissions;
+        try { localStorage.setItem('nlg__numi_plan_missions', JSON.stringify(allMissions)); } catch(e) {}
+        if (typeof updateDriverHistory === 'function') updateDriverHistory(allMissions);
+        if (typeof renderExploitation  === 'function') renderExploitation();
+        console.log('[Sync] Missions mises à jour — ' + allMissions.length);
+      }
     });
+  });
 
-  } catch(e) { console.warn('Firebase load error', e); }
+  // Sync Numi-Flotte supprimée
+  const syncOk = true;
   /* ntAutoSend désactivé — envoi manuel via bouton 📡 dans la carte chauffeur */
 
   // Appliquer la sync Numi-Flotte (reconstruit chauffeurs/camions + réapplique missions)
