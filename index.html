@@ -464,11 +464,10 @@ border-left:4px solid var(--acc);margin-bottom:16px;
 </style>
 
   <!-- ═══════ FIREBASE SDK FIRESTORE RÉEL ═══════ -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-    const firebaseConfig = {
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script>
+    var firebaseConfig = {
       apiKey: "AIzaSyDA-loDmlfcdPC0es0sb6tiCM4JXP2VF24",
       authDomain: "numi-pro.firebaseapp.com",
       projectId: "numi-pro",
@@ -477,13 +476,13 @@ border-left:4px solid var(--acc);margin-bottom:16px;
       appId: "1:438168275921:web:5c7e1f64931706610baef0"
     };
 
-    const app = initializeApp(firebaseConfig);
-    const db  = getFirestore(app);
+    firebase.initializeApp(firebaseConfig);
+    var db = firebase.firestore();
 
     function _pathToRef(path) {
-      var parts = path.replace(/\/g, '/').split('/');
-      if (parts.length === 1) return doc(db, 'numiplan', parts[0]);
-      return doc(db, parts[0], parts.slice(1).join('_'));
+      var parts = path.replace(/\//g, '/').split('/');
+      if (parts.length === 1) return db.collection('numiplan').doc(parts[0]);
+      return db.collection(parts[0]).doc(parts.slice(1).join('_'));
     }
 
     function _makeSnap(val) {
@@ -498,20 +497,20 @@ border-left:4px solid var(--acc);margin-bottom:16px;
     window.FIREBASE_OK = true;
 
     window.fbWrite = async function(key, val) {
-      var obj = (typeof val === 'string') ? (() => { try { return JSON.parse(val); } catch(e) { return {_raw: val}; } })() : val;
+      var obj = (typeof val === 'string') ? (function(){ try { return JSON.parse(val); } catch(e) { return {_raw: val}; } })() : val;
       _lsWrite(key, obj);
       try {
-        await setDoc(_pathToRef(key), { _data: typeof val === 'string' ? val : JSON.stringify(val), _ts: Date.now() });
+        await _pathToRef(key).set({ _data: typeof val === 'string' ? val : JSON.stringify(val), _ts: Date.now() });
       } catch(e) { console.warn('[Firebase] write error:', key, e.message); }
       return true;
     };
 
     window.fbRead = async function(key) {
       try {
-        var snap = await getDoc(_pathToRef(key));
-        if (snap.exists()) {
+        var snap = await _pathToRef(key).get();
+        if (snap.exists) {
           var d = snap.data();
-          var parsed = d._data ? (()=>{ try{return JSON.parse(d._data);}catch(e){return d._data;} })() : d;
+          var parsed = d._data ? (function(){ try{return JSON.parse(d._data);}catch(e){return d._data;} })() : d;
           _lsWrite(key, parsed);
           return parsed;
         }
@@ -520,12 +519,11 @@ border-left:4px solid var(--acc);margin-bottom:16px;
     };
 
     window.fbListen = function(key, cb) {
-      var ref = _pathToRef(key);
-      var unsub = onSnapshot(ref, function(snap) {
+      return _pathToRef(key).onSnapshot(function(snap) {
         var val = null;
-        if (snap.exists()) {
+        if (snap.exists) {
           var d = snap.data();
-          val = d._data ? (()=>{ try{return JSON.parse(d._data);}catch(e){return d._data;} })() : d;
+          val = d._data ? (function(){ try{return JSON.parse(d._data);}catch(e){return d._data;} })() : d;
           _lsWrite(key, val);
         }
         try { cb(_makeSnap(val)); } catch(e) {}
@@ -533,7 +531,6 @@ border-left:4px solid var(--acc);margin-bottom:16px;
         console.warn('[Firebase] listen error:', key, err.message);
         try { cb(_makeSnap(_lsRead(key))); } catch(e) {}
       });
-      return unsub;
     };
 
     window._fbSet   = window.fbWrite;
