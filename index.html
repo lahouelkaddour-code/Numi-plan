@@ -755,7 +755,7 @@ border-left:4px solid var(--acc);margin-bottom:16px;
 <div id="page-chauffeurs" class="page">
 <div class="top">
 <div class="top-title">Gestion des chauffeurs</div>
-<button class="btn btn-grn" onclick="ouvrirModalNouveauChauffeur()" style="font-size:12px;padding:8px 16px;font-weight:700">➕ Nouveau chauffeur</button>
+<button class="btn btn-blu" onclick="migrerCSRversFirebase()" style="font-size:11px;padding:6px 12px" title="Forcer l'écriture de la liste CSR vers Firebase">🔄 Forcer migration CSR</button>
 </div>
 <div class="content">
 <input type="text" class="search-box" id="searchChauffeurs" placeholder="🔍 Rechercher..." oninput="renderChauffeurs()">
@@ -767,7 +767,6 @@ border-left:4px solid var(--acc);margin-bottom:16px;
 <div id="page-flotte" class="page">
 <div class="top">
 <div class="top-title">Gestion de la flotte</div>
-<button class="btn btn-grn" onclick="ouvrirModalNouveauCamion()" style="font-size:12px;padding:8px 16px;font-weight:700">➕ Nouveau camion</button>
 </div>
 <div class="content">
 <input type="text" class="search-box" id="searchFlotte" placeholder="🔍 Rechercher...">
@@ -2813,200 +2812,6 @@ signalement: ['Agressif', 'Refus d\'exécuter une tâche', 'Retard', 'Dégradati
 // ══════════════════════════════════════════════
 // MIGRATION CSR → FIREBASE
 // ══════════════════════════════════════════════
-// ══════════════════════════════════════════════════════
-// NOUVEAU CHAUFFEUR
-// ══════════════════════════════════════════════════════
-function ouvrirModalNouveauChauffeur() {
-  var sitesUniques = [...new Set(STATE.chauffeurs.map(function(c){ return c.site; }).filter(Boolean))].sort();
-  var sitesOpts = sitesUniques.map(function(s){ return '<option value="' + s + '">' + s + '</option>'; }).join('');
-  var equipeOpts = ['A','B','C','D','E','F','G'].map(function(e){
-    return '<option value="equipe_' + e.toLowerCase() + '">Équipe ' + e + '</option>';
-  }).join('');
-
-  var modal = document.createElement('div');
-  modal.className = 'modal show';
-  modal.id = 'modalNouveauChauffeur';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6)';
-  modal.innerHTML = '<div style="background:var(--bg2);border-radius:16px;padding:32px;width:440px;max-width:95vw;max-height:90vh;overflow-y:auto">'
-    + '<h3 style="margin:0 0 20px 0;font-size:18px">👤 Nouveau chauffeur</h3>'
-    + '<div style="display:grid;gap:14px">'
-    + '<div><label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:var(--txt3)">Nom complet *</label>'
-    + '<input type="text" id="ncNom" class="input" placeholder="Ex: BEN ALI Mohamed" style="width:100%;text-transform:uppercase"></div>'
-    + '<div><label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:var(--txt3)">Site *</label>'
-    + '<select id="ncSite" class="input" style="width:100%" onchange="document.getElementById('ncSiteManuel').style.display=this.value==='__autre__'?'block':'none'">'
-    + '<option value="">-- Sélectionner --</option>' + sitesOpts
-    + '<option value="__autre__">✏️ Autre site...</option></select>'
-    + '<input type="text" id="ncSiteManuel" class="input" placeholder="Nom du site" style="width:100%;display:none;margin-top:8px"></div>'
-    + '<div><label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:var(--txt3)">Téléphone</label>'
-    + '<input type="tel" id="ncTel" class="input" placeholder="Ex: 0550 123 456" style="width:100%"></div>'
-    + '<div><label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:var(--txt3)">Équipe</label>'
-    + '<select id="ncEquipe" class="input" style="width:100%"><option value="">-- Aucune --</option>' + equipeOpts + '</select></div>'
-    + '<div style="display:flex;gap:12px;margin-top:8px">'
-    + '<button class="btn btn-grn" onclick="sauvegarderNouveauChauffeur()">💾 Créer le chauffeur</button>'
-    + '<button class="btn btn-secondary" onclick="document.getElementById('modalNouveauChauffeur').remove()">❌ Annuler</button>'
-    + '</div></div></div>';
-  document.body.appendChild(modal);
-  setTimeout(function(){ var n=document.getElementById('ncNom'); if(n) n.focus(); }, 100);
-}
-
-async function sauvegarderNouveauChauffeur() {
-  var nom = (document.getElementById('ncNom').value || '').trim().toUpperCase();
-  var siteEl = document.getElementById('ncSite');
-  var site = siteEl.value === '__autre__'
-    ? (document.getElementById('ncSiteManuel').value || '').trim()
-    : siteEl.value;
-  var tel = (document.getElementById('ncTel').value || '').trim();
-  var equipe = (document.getElementById('ncEquipe').value || '');
-
-  if (!nom) { alert('⚠️ Le nom est obligatoire.'); return; }
-  if (!site) { alert('⚠️ Le site est obligatoire.'); return; }
-  if (STATE.chauffeurs.find(function(c){ return c.nom.toUpperCase() === nom && !c.demission; })) {
-    alert('⚠️ Un chauffeur avec ce nom existe déjà.'); return;
-  }
-
-  var newId = 'chauff_' + Date.now();
-  STATE.chauffeurs.push({
-    id: newId, nom: nom, site: site, tel: tel, demission: false,
-    mise_en_demeure: false, equipe: equipe, barre_arrimage: '', cable_tir: '',
-    tracteur_principal: '', remorque_principale: '', vehicules: [],
-    total_missions: 0, derniere_mission: null
-  });
-
-  save();
-  var m = document.getElementById('modalNouveauChauffeur');
-  if (m) m.remove();
-  renderChauffeurs();
-  showToast('✅ Chauffeur créé : ' + nom);
-}
-
-// ══════════════════════════════════════════════════════
-// NOUVEAU CAMION
-// ══════════════════════════════════════════════════════
-function ouvrirModalNouveauCamion() {
-  var chaufsOpts = STATE.chauffeurs.filter(function(c){ return !c.demission; })
-    .sort(function(a,b){ return a.nom.localeCompare(b.nom); })
-    .map(function(c){ return '<option value="' + c.id + '">' + c.nom + ' — ' + c.site + '</option>'; }).join('');
-
-  var modal = document.createElement('div');
-  modal.id = 'modalNouveauCamion';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6)';
-  modal.innerHTML = '<div style="background:var(--bg2);border-radius:16px;padding:32px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto">'
-    + '<h3 style="margin:0 0 20px 0;font-size:18px">🚛 Nouveau camion / véhicule</h3>'
-    + '<div style="display:grid;gap:14px">'
-
-    + '<div><label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:var(--txt3)">Chauffeur *</label>'
-    + '<select id="ncamChauffeur" class="input" style="width:100%"><option value="">-- Sélectionner un chauffeur --</option>' + chaufsOpts + '</select></div>'
-
-    + '<div><label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:var(--txt3)">Type de véhicule</label>'
-    + '<select id="ncamType" class="input" style="width:100%" onchange="ncamToggleType()">'
-    + '<option value="tracteur">🚛 Tracteur</option>'
-    + '<option value="remorque">🔗 Remorque</option>'
-    + '</select></div>'
-
-    + '<div><label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:var(--txt3)">Immatriculation *</label>'
-    + '<input type="text" id="ncamId" class="input" placeholder="Ex: 001234-514-16" style="width:100%"></div>'
-
-    + '<div id="ncamTracteurOpts"><label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:var(--txt3)">Catégorie</label>'
-    + '<select id="ncamCategorie" class="input" style="width:100%" onchange="ncamToggleCat()">'
-    + '<option value="permanent">🏢 Permanent</option>'
-    + '<option value="externe">🔗 Externe</option>'
-    + '<option value="relais">🔄 Relais (temporaire)</option>'
-    + '</select></div>'
-
-    + '<div id="ncamDatesRelais" style="display:none;display:grid;gap:8px">'
-    + '<label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:var(--txt3)">📅 Date début</label>'
-    + '<input type="date" id="ncamDeb" class="input" style="width:100%">'
-    + '<label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:var(--txt3)">📅 Date fin (prévue)</label>'
-    + '<input type="date" id="ncamFin" class="input" style="width:100%"></div>'
-
-    + '<div id="ncamRemorqueField"><label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:var(--txt3)">🔗 Remorque associée</label>'
-    + '<input type="text" id="ncamRemorque" class="input" placeholder="Ex: 000457-816-16 (optionnel)" style="width:100%"></div>'
-
-    + '<div id="ncamMateriel"><label style="display:block;font-size:12px;font-weight:700;margin-bottom:8px;color:var(--txt3)">🧰 Matériel disponible</label>'
-    + '<div style="display:flex;gap:16px">'
-    + '<label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" id="ncamBarre" style="width:16px;height:16px;accent-color:var(--grn)"> 🔩 Barre d'arrimage</label>'
-    + '<label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" id="ncamCable" style="width:16px;height:16px;accent-color:var(--grn)"> 🔗 Câble de tir</label>'
-    + '</div></div>'
-
-    + '<div style="display:flex;gap:12px;margin-top:8px">'
-    + '<button class="btn btn-grn" onclick="sauvegarderNouveauCamion()">💾 Enregistrer</button>'
-    + '<button class="btn btn-secondary" onclick="document.getElementById('modalNouveauCamion').remove()">❌ Annuler</button>'
-    + '</div></div></div>';
-  document.body.appendChild(modal);
-}
-
-function ncamToggleType() {
-  var t = document.getElementById('ncamType').value;
-  var isTracteur = t === 'tracteur';
-  document.getElementById('ncamTracteurOpts').style.display = isTracteur ? 'block' : 'none';
-  document.getElementById('ncamRemorqueField').style.display = isTracteur ? 'block' : 'none';
-  document.getElementById('ncamMateriel').style.display = isTracteur ? 'block' : 'none';
-  document.getElementById('ncamDatesRelais').style.display = 'none';
-}
-
-function ncamToggleCat() {
-  var cat = document.getElementById('ncamCategorie').value;
-  document.getElementById('ncamDatesRelais').style.display = (cat === 'relais' || cat === 'externe') ? 'grid' : 'none';
-}
-
-function sauvegarderNouveauCamion() {
-  var chaufId = document.getElementById('ncamChauffeur').value;
-  var typeVeh = document.getElementById('ncamType').value;
-  var immat = (document.getElementById('ncamId').value || '').trim();
-
-  if (!chaufId) { alert('⚠️ Sélectionnez un chauffeur.'); return; }
-  if (!immat) { alert('⚠️ L'immatriculation est obligatoire.'); return; }
-  if (STATE.camions.find(function(c){ return c.id === immat; })) {
-    alert('⚠️ Ce véhicule existe déjà : ' + immat); return;
-  }
-
-  var chauffeur = STATE.chauffeurs.find(function(c){ return c.id === chaufId; });
-  if (!chauffeur) { alert('⚠️ Chauffeur introuvable.'); return; }
-
-  var newCamion = {
-    id: immat,
-    chauffeur: chauffeur.nom,
-    site: chauffeur.site,
-    status: 'actif'
-  };
-
-  if (typeVeh === 'remorque') {
-    newCamion.type = 'remorque';
-  } else {
-    var cat = document.getElementById('ncamCategorie').value;
-    var remorque = (document.getElementById('ncamRemorque').value || '').trim();
-    if (remorque) newCamion.remorque = remorque;
-    newCamion.barre_arrimage = document.getElementById('ncamBarre').checked ? 'OUI' : 'NON';
-    newCamion.cable_tir = document.getElementById('ncamCable').checked ? 'OUI' : 'NON';
-    if (cat === 'externe') {
-      newCamion.is_ext = true;
-      newCamion.date_deb = document.getElementById('ncamDeb').value || new Date().toISOString().split('T')[0];
-      newCamion.date_fin = document.getElementById('ncamFin').value || '';
-    } else if (cat === 'relais') {
-      newCamion.is_relais = true;
-      newCamion.date_deb = document.getElementById('ncamDeb').value || new Date().toISOString().split('T')[0];
-      newCamion.date_fin = document.getElementById('ncamFin').value || '';
-    } else {
-      newCamion.is_ext = false;
-      newCamion.date_deb = new Date().toISOString().split('T')[0];
-      newCamion.date_fin = '';
-    }
-    // Sync matériel sur le chauffeur
-    var allVehs = STATE.camions.filter(function(c){ return c.chauffeur === chauffeur.nom && !c.type; });
-    allVehs.push(newCamion);
-    chauffeur.barre_arrimage = allVehs.some(function(v){ return v.barre_arrimage === 'OUI'; }) ? 'OUI' : 'NON';
-    chauffeur.cable_tir = allVehs.some(function(v){ return v.cable_tir === 'OUI'; }) ? 'OUI' : 'NON';
-  }
-
-  STATE.camions.push(newCamion);
-  save();
-  var m = document.getElementById('modalNouveauCamion');
-  if (m) m.remove();
-  renderFlotte();
-  renderChauffeurs();
-  showToast('✅ Camion ajouté : ' + immat);
-}
-
 async function migrerCSRversFirebase() {
   const nb = STATE.chauffeurs.length;
   const nbC = STATE.camions.length;
