@@ -755,7 +755,7 @@ border-left:4px solid var(--acc);margin-bottom:16px;
 <div id="page-chauffeurs" class="page">
 <div class="top">
 <div class="top-title">Gestion des chauffeurs</div>
-<button class="btn btn-acc" onclick="ouvrirModalNouveauChauffeur()" style="font-size:12px;padding:8px 16px;font-weight:700">➕ Nouveau chauffeur</button>
+<button class="btn btn-blu" onclick="migrerCSRversFirebase()" style="font-size:11px;padding:6px 12px" title="Forcer l'écriture de la liste CSR vers Firebase">🔄 Forcer migration CSR</button>
 </div>
 <div class="content">
 <input type="text" class="search-box" id="searchChauffeurs" placeholder="🔍 Rechercher..." oninput="renderChauffeurs()">
@@ -2887,64 +2887,6 @@ async function migrerCSRversFirebase() {
   } catch(err) {
     console.error('Migration error:', err);
     showToast('❌ Erreur: ' + err.message, 'error');
-  }
-}
-
-// ══════════════════════════════════════════════
-// CRÉATION D'UN NOUVEAU CHAUFFEUR
-// ══════════════════════════════════════════════
-function ouvrirModalNouveauChauffeur() {
-  var sitesUniques = [...new Set(STATE.chauffeurs.map(function(c){ return c.site; }).filter(Boolean))].sort();
-  var sitesOpts = sitesUniques.map(function(s){ return '<option value="'+s+'">'+s+'</option>'; }).join('');
-  var modal = document.createElement('div');
-  modal.className = 'ntrack-modal-overlay';
-  modal.onclick = function(e){ if(e.target===modal){ modal.remove(); } };
-  modal.innerHTML = '<div class="ntrack-modal-box" style="max-width:440px">'
-    + '<div class="ntrack-modal-title">➕ Nouveau chauffeur</div>'
-    + '<label class="ntrack-label">Nom complet <span style="color:#ef4444">*</span></label>'
-    + '<input class="ntrack-input" id="ncNom" placeholder="Ex: BEN ALI Mohamed" style="text-transform:uppercase">'
-    + '<label class="ntrack-label">Site <span style="color:#ef4444">*</span></label>'
-    + '<select class="ntrack-input" id="ncSite"><option value="">-- Sélectionner --</option>' + sitesOpts + '<option value="__autre__">✏️ Autre site</option></select>'
-    + '<input class="ntrack-input" id="ncSiteManuel" placeholder="Nom du site" style="display:none;margin-top:6px">'
-    + '<label class="ntrack-label">Téléphone</label>'
-    + '<input class="ntrack-input" id="ncTel" placeholder="Ex: 0550 123 456" inputmode="tel">'
-    + '<label class="ntrack-label">Équipe</label>'
-    + '<select class="ntrack-input" id="ncEquipe"><option value="">-- Aucune --</option><option value="equipe_a">Équipe A</option><option value="equipe_b">Équipe B</option><option value="equipe_c">Équipe C</option><option value="equipe_d">Équipe D</option><option value="equipe_e">Équipe E</option><option value="equipe_f">Équipe F</option><option value="equipe_g">Équipe G</option></select>'
-    + '<div style="display:flex;gap:8px;margin-top:16px"><button class="ntrack-btn-primary" onclick="sauvegarderNouveauChauffeur()">✅ Créer le chauffeur</button><button class="ntrack-btn-secondary" onclick="document.querySelectorAll('.ntrack-modal-overlay').forEach(function(e){e.remove();})">Annuler</button></div>'
-    + '</div>';
-  modal.querySelector('#ncSite').addEventListener('change', function(){
-    var m=modal.querySelector('#ncSiteManuel');
-    if(this.value==='__autre__'){ m.style.display='block'; m.focus(); }
-    else { m.style.display='none'; }
-  });
-  document.body.appendChild(modal);
-  setTimeout(function(){ var n=modal.querySelector('#ncNom'); if(n) n.focus(); },100);
-}
-
-async function sauvegarderNouveauChauffeur() {
-  var nom=(document.getElementById('ncNom').value||'').trim().toUpperCase();
-  var siteEl=document.getElementById('ncSite');
-  var site=siteEl.value==='__autre__'?(document.getElementById('ncSiteManuel').value||'').trim():siteEl.value;
-  var tel=(document.getElementById('ncTel').value||'').trim();
-  var equipe=(document.getElementById('ncEquipe').value||'');
-  if(!nom){ alert('Le nom du chauffeur est obligatoire.'); return; }
-  if(!site){ alert('Le site est obligatoire.'); return; }
-  var doublon=STATE.chauffeurs.find(function(c){ return c.nom.toUpperCase()===nom&&!c.demission; });
-  if(doublon){ alert('Un chauffeur avec ce nom existe déjà : '+doublon.nom); return; }
-  var newId='chauff_'+Date.now();
-  var nc={ id:newId,nom:nom,site:site,tel:tel,demission:false,mise_en_demeure:false,equipe:equipe,barre_arrimage:'',cable_tir:'',tracteur_principal:'',remorque_principale:'',vehicules:[],total_missions:0,derniere_mission:null };
-  STATE.chauffeurs.push(nc);
-  try {
-    var cs=STATE.chauffeurs.map(function(c){ return {id:c.id,nom:c.nom,site:c.site,tel:c.tel,demission:c.demission||false,mise_en_demeure:c.mise_en_demeure||false,equipe:c.equipe||'',barre_arrimage:c.barre_arrimage||'',cable_tir:c.cable_tir||'',tracteur_principal:c.tracteur_principal||'',remorque_principale:c.remorque_principale||'',vehicules:c.vehicules||[],total_missions:c.total_missions||0,derniere_mission:c.derniere_mission||null}; });
-    var pl=JSON.stringify({chauffeurs:cs,camions:STATE.camions});
-    if(window.fbWrite) await window.fbWrite('numi_plan_chauffeurs',pl);
-    try { localStorage.setItem('nlg__numi_plan_chauffeurs',pl); } catch(e) {}
-    document.querySelectorAll('.ntrack-modal-overlay').forEach(function(e){ e.remove(); });
-    renderChauffeurs();
-    showToast('✅ Chauffeur créé : '+nom);
-  } catch(err) {
-    STATE.chauffeurs=STATE.chauffeurs.filter(function(c){ return c.id!==newId; });
-    alert('❌ Erreur sauvegarde : '+err.message);
   }
 }
 
