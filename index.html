@@ -463,118 +463,87 @@ border-left:4px solid var(--acc);margin-bottom:16px;
 
 </style>
 
-  <!-- ═══════ FIREBASE SDK ═══════ -->
-  <script>
-// =============================================
-//  NUMILOG LOCAL STORAGE ENGINE
-//  localStorage + BroadcastChannel
-// =============================================
-(function() {
-  var _bc = null;
-  try { _bc = new BroadcastChannel('numilog_sync'); } catch(e) {}
-  var _snapListeners = {};
+  <!-- ═══════ FIREBASE SDK FIRESTORE RÉEL ═══════ -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  function _notify(key, val) {
-    var ls = _snapListeners[key] || [];
-    ls.forEach(function(cb) { try { cb(_makeSnap(key, val)); } catch(e) {} });
-  }
-
-  function _makeSnap(key, val) {
-    var hasData = val !== null && val !== undefined;
-    return {
-      exists: function() { return hasData; },
-      data:   function() { return val; }
+    const firebaseConfig = {
+      apiKey: "AIzaSyDA-loDmlfcdPC0es0sb6tiCM4JXP2VF24",
+      authDomain: "numi-pro.firebaseapp.com",
+      projectId: "numi-pro",
+      storageBucket: "numi-pro.firebasestorage.app",
+      messagingSenderId: "438168275921",
+      appId: "1:438168275921:web:5c7e1f64931706610baef0"
     };
-  }
 
-  function _lsKey(path) {
-    return 'nlg__' + path.replace(/\//g, '__');
-  }
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
 
-  function _lsRead(path) {
-    try {
-      var raw = localStorage.getItem(_lsKey(path));
-      if (raw === null) return null;
-      return JSON.parse(raw);
-    } catch(e) { return null; }
-  }
+    function _pathToRef(path) {
+      var parts = path.replace(/\/g, '/').split('/');
+      if (parts.length === 1) return doc(db, 'numiplan', parts[0]);
+      return doc(db, parts[0], parts.slice(1).join('_'));
+    }
 
-  function _lsWrite(path, data) {
-    try {
-      localStorage.setItem(_lsKey(path), JSON.stringify(data));
+    function _makeSnap(val) {
+      var hasData = val !== null && val !== undefined;
+      return { exists: function() { return hasData; }, data: function() { return val; } };
+    }
+
+    function _lsKey(k) { return 'nlg__' + k.replace(/\//g,'__'); }
+    function _lsRead(k) { try { var r=localStorage.getItem(_lsKey(k)); return r?JSON.parse(r):null; } catch(e){return null;} }
+    function _lsWrite(k,v) { try { localStorage.setItem(_lsKey(k), JSON.stringify(v)); } catch(e){} }
+
+    window.FIREBASE_OK = true;
+
+    window.fbWrite = async function(key, val) {
+      var obj = (typeof val === 'string') ? (() => { try { return JSON.parse(val); } catch(e) { return {_raw: val}; } })() : val;
+      _lsWrite(key, obj);
+      try {
+        await setDoc(_pathToRef(key), { _data: typeof val === 'string' ? val : JSON.stringify(val), _ts: Date.now() });
+      } catch(e) { console.warn('[Firebase] write error:', key, e.message); }
       return true;
-    } catch(e) { console.warn('localStorage write:', path, e); return false; }
-  }
-
-  // --- API publique ---
-  window.FIREBASE_OK = true;
-
-  window.fbWrite = async function(key, val) {
-    var obj = (typeof val === 'string') ? (() => { try { return JSON.parse(val); } catch(e) { return val; } })() : val;
-    _lsWrite(key, obj);
-    _notify(key, obj);
-    if (_bc) _bc.postMessage({ key: key, val: obj });
-    return true;
-  };
-
-  window.fbRead = async function(key) {
-    return _lsRead(key);
-  };
-
-  window.fbListen = function(key, cb) {
-    if (!_snapListeners[key]) _snapListeners[key] = [];
-    _snapListeners[key].push(cb);
-    try { cb(_makeSnap(key, _lsRead(key))); } catch(e) {}
-    return function() {
-      _snapListeners[key] = (_snapListeners[key]||[]).filter(function(f){return f!==cb;});
     };
-  };
 
-  window._fbSet = async function(path, data) {
-    _lsWrite(path, data);
-    _notify(path, data);
-    if (_bc) _bc.postMessage({ key: path, val: data });
-    return true;
-  };
-
-  window._fbGet = async function(path) {
-    return _makeSnap(path, _lsRead(path));
-  };
-
-  window._fbSnap = function(path, cb) {
-    if (!_snapListeners[path]) _snapListeners[path] = [];
-    _snapListeners[path].push(cb);
-    try { cb(_makeSnap(path, _lsRead(path))); } catch(e) {}
-    return function() {
-      _snapListeners[path] = (_snapListeners[path]||[]).filter(function(f){return f!==cb;});
+    window.fbRead = async function(key) {
+      try {
+        var snap = await getDoc(_pathToRef(key));
+        if (snap.exists()) {
+          var d = snap.data();
+          var parsed = d._data ? (()=>{ try{return JSON.parse(d._data);}catch(e){return d._data;} })() : d;
+          _lsWrite(key, parsed);
+          return parsed;
+        }
+      } catch(e) { console.warn('[Firebase] read error:', key, e.message); }
+      return _lsRead(key);
     };
-  };
 
-  window._fbWrite = async function(path, data) {
-    _lsWrite(path, data);
-    _notify(path, data);
-    if (_bc) _bc.postMessage({ key: path, val: data });
-    return true;
-  };
-
-  if (_bc) {
-    _bc.onmessage = function(evt) {
-      var key = evt.data && evt.data.key;
-      var val = evt.data && evt.data.val;
-      if (!key) return;
-      // Normaliser la cle : '/' -> '__' pour matcher les listeners
-      var normKey = key.replace(/\//g, '__');
-      _lsWrite(key, val);
-      _notify(normKey, val);
-      // Notifier aussi avec la cle originale si differente
-      if (normKey !== key) _notify(key, val);
+    window.fbListen = function(key, cb) {
+      var ref = _pathToRef(key);
+      var unsub = onSnapshot(ref, function(snap) {
+        var val = null;
+        if (snap.exists()) {
+          var d = snap.data();
+          val = d._data ? (()=>{ try{return JSON.parse(d._data);}catch(e){return d._data;} })() : d;
+          _lsWrite(key, val);
+        }
+        try { cb(_makeSnap(val)); } catch(e) {}
+      }, function(err) {
+        console.warn('[Firebase] listen error:', key, err.message);
+        try { cb(_makeSnap(_lsRead(key))); } catch(e) {}
+      });
+      return unsub;
     };
-  }
 
-  window.dispatchEvent(new Event('firebase_ready'));
-  console.log('[Numilog] Moteur local actif - localStorage + BroadcastChannel');
-})();
-</script>
+    window._fbSet   = window.fbWrite;
+    window._fbWrite = window.fbWrite;
+    window._fbGet   = async function(path) { return _makeSnap(await window.fbRead(path)); };
+    window._fbSnap  = function(path, cb) { return window.fbListen(path, cb); };
+
+    window.dispatchEvent(new Event('firebase_ready'));
+    console.log('[Numilog] ✅ Firebase Firestore connecté — numi-pro');
+  </script>
 
   <div id="fb-banner" style="
     display:none; position:fixed; top:0; left:50%; transform:translateX(-50%);
@@ -2849,6 +2818,37 @@ async function migrerCSRversFirebase() {
   } catch(err) {
     console.error('Migration error:', err);
     showToast('❌ Erreur migration: ' + err.message, 'error');
+  }
+}
+
+
+// ══════════════════════════════════════════════
+// MIGRATION CSR → FIREBASE
+// ══════════════════════════════════════════════
+async function migrerCSRversFirebase() {
+  const nb = STATE.chauffeurs.length;
+  const nbC = STATE.camions.length;
+  if (!confirm('⚠️ Cette action va écraser les données Firebase avec la liste actuelle :\n\n👥 ' + nb + ' chauffeurs\n🚛 ' + nbC + ' camions\n\nContinuer ?')) return;
+  if (!window.FIREBASE_OK || !window.fbWrite) { showToast('❌ Firebase non connecté', 'error'); return; }
+  showToast('⏳ Migration en cours...');
+  try {
+    const chaufsStripped = STATE.chauffeurs.map(function(c) {
+      return {
+        id: c.id, nom: c.nom, site: c.site, tel: c.tel,
+        demission: c.demission || false, mise_en_demeure: c.mise_en_demeure || false,
+        equipe: c.equipe || '', barre_arrimage: c.barre_arrimage || '',
+        cable_tir: c.cable_tir || '', tracteur_principal: c.tracteur_principal || '',
+        remorque_principale: c.remorque_principale || '', vehicules: c.vehicules || [],
+        total_missions: c.total_missions || 0, derniere_mission: c.derniere_mission || null
+      };
+    });
+    const chauffPayload = JSON.stringify({ chauffeurs: chaufsStripped, camions: STATE.camions });
+    await window.fbWrite('numi_plan_chauffeurs', chauffPayload);
+    try { localStorage.setItem('nlg__numi_plan_chauffeurs', chauffPayload); } catch(e) {}
+    showToast('✅ Migration réussie — ' + nb + ' chauffeurs & ' + nbC + ' camions dans Firebase');
+  } catch(err) {
+    console.error('Migration error:', err);
+    showToast('❌ Erreur: ' + err.message, 'error');
   }
 }
 
