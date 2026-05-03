@@ -1404,6 +1404,74 @@ window.addEventListener('firebase_ready', async function() {
     if (STATE.missions && STATE.missions.length > 0 && typeof updateDriverHistory === 'function') {
       updateDriverHistory(STATE.missions);
     }
+
+    // ══ LISTENERS TEMPS RÉEL — sync automatique entre utilisateurs ══
+    // Écouter les changements de chauffeurs/camions
+    window.fbListen('numi_plan_chauffeurs', function(snap) {
+      if (!snap.exists()) return;
+      var d = snap.data();
+      if (!d) return;
+      var lc = typeof d === 'string' ? JSON.parse(d) : d;
+      var changed = false;
+      if (lc.chauffeurs && lc.chauffeurs.length > 0) {
+        STATE.chauffeurs = lc.chauffeurs;
+        changed = true;
+      }
+      if (lc.camions && lc.camions.length > 0) {
+        STATE.camions = lc.camions;
+        changed = true;
+      }
+      if (changed && typeof renderExploitation === 'function') {
+        renderExploitation();
+        if (typeof renderChauffeurs === 'function') renderChauffeurs();
+        console.log('[Sync] ✅ Chauffeurs/camions mis à jour en temps réel');
+      }
+    });
+
+    // Écouter les changements de statuts/signalements
+    window.fbListen(STORAGE_KEY, function(snap) {
+      if (!snap.exists()) return;
+      var d = snap.data();
+      if (!d) return;
+      var ls = typeof d === 'string' ? JSON.parse(d) : d;
+      STATE.status                  = ls.status                  || STATE.status;
+      STATE.signalements_historique = ls.signalements_historique || STATE.signalements_historique;
+      STATE.pannes_historique       = ls.pannes_historique       || STATE.pannes_historique;
+      if (typeof renderExploitation === 'function') {
+        renderExploitation();
+        console.log('[Sync] ✅ Statuts mis à jour en temps réel');
+      }
+    });
+
+    // Écouter les changements de missions (meta)
+    window.fbListen('numi_plan_missions_meta', function(snap) {
+      if (!snap.exists() || !STATE._firebaseLoaded) return;
+      var d = snap.data();
+      if (!d) return;
+      var meta = typeof d === 'string' ? JSON.parse(d) : d;
+      var totalChunks = meta.chunks || 0;
+      if (totalChunks === 0) return;
+      var promises = [];
+      for (var ci = 0; ci < totalChunks; ci++) {
+        promises.push(window.fbRead('numi_plan_missions_' + ci));
+      }
+      Promise.all(promises).then(function(results) {
+        var allMissions = [];
+        results.forEach(function(cr) {
+          if (cr) {
+            var chunk = typeof cr === 'string' ? JSON.parse(cr) : cr;
+            if (Array.isArray(chunk)) allMissions = allMissions.concat(chunk);
+          }
+        });
+        if (allMissions.length > 0) {
+          STATE.missions = allMissions;
+          if (typeof updateDriverHistory === 'function') updateDriverHistory(allMissions);
+          if (typeof renderExploitation === 'function') renderExploitation();
+          console.log('[Sync] ✅ Missions mises à jour en temps réel — ' + allMissions.length);
+        }
+      });
+    });
+
   } catch(e) { console.warn('Firebase load error', e); }
   /* ntAutoSend désactivé — envoi manuel via bouton 📡 dans la carte chauffeur */
 
