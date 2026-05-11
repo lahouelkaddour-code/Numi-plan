@@ -14,6 +14,12 @@
 <script type="module">
   import { initializeApp }                          from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  // ── Helper : accès sécurisé aux variables globales déclarées en script classique ──
+  // Les scripts type="module" s'exécutent APRÈS le parsing mais leurs imports
+  // s'exécutent avant les scripts classiques inline → on utilise des getters lazy.
+  function getCurrentEquipe() {
+    return (typeof window.CURRENT_EQUIPE !== 'undefined') ? window.CURRENT_EQUIPE : 'A';
+  }
 
   // ── Config Firebase Numi-Pro ──
   const firebaseConfig = {
@@ -52,23 +58,24 @@
     // on met à jour seulement DB_A (équipe courante = A au démarrage).
     if (data.A || data.B || data.C || data.D) {
       // Nouvelle structure multi-équipe
-      if (data.A) Object.assign(window.DB_A || {}, data.A);
-      if (data.B) Object.assign(window.DB_B || {}, data.B);
-      if (data.C) Object.assign(window.DB_C || {}, data.C);
-      if (data.D) Object.assign(window.DB_D || {}, data.D);
+      if (data.A) { window.DB_A = window.DB_A || {}; Object.assign(window.DB_A, data.A); }
+      if (data.B) { window.DB_B = window.DB_B || {}; Object.assign(window.DB_B, data.B); }
+      if (data.C) { window.DB_C = window.DB_C || {}; Object.assign(window.DB_C, data.C); }
+      if (data.D) { window.DB_D = window.DB_D || {}; Object.assign(window.DB_D, data.D); }
       // Recharger l'équipe active dans DB
-      const eq = typeof CURRENT_EQUIPE !== 'undefined' ? CURRENT_EQUIPE : 'A';
-      const src = eq==='B' ? window.DB_B : eq==='C' ? window.DB_C : eq==='D' ? window.DB_D : window.DB_A;
-      if (src) Object.assign(window.DB, {
+      const eq = getCurrentEquipe();
+      const src = window['DB_' + eq];
+      if (src && window.DB) Object.assign(window.DB, {
         dispo: src.dispo, pannes: src.pannes, nc: src.nc,
         gasoil: src.gasoil, equip: src.equip, activite: src.activite||[],
         bl: src.bl, odo: src.odo, odo_weeks: src.odo_weeks, cspc: src.cspc||[]
       });
     } else {
       // Ancienne structure plate : mise à jour directe de DB (= équipe A)
-      Object.assign(window.DB_A || window.DB, data);
-      const eq = typeof CURRENT_EQUIPE !== 'undefined' ? CURRENT_EQUIPE : 'A';
-      if (eq === 'A') Object.assign(window.DB, data);
+      window.DB_A = window.DB_A || {};
+      Object.assign(window.DB_A, data);
+      const eq = getCurrentEquipe();
+      if (eq === 'A' && window.DB) Object.assign(window.DB, data);
     }
 
     // Re-render l'onglet actif sans perdre la navigation
@@ -109,19 +116,15 @@
   // ──────────────────────────────────────────────
   window._firebaseSaveDB = function(dbData) {
     _ignoreNext++;   // absorbe le prochain snapshot déclenché par cette écriture
-    const eq = (typeof CURRENT_EQUIPE !== 'undefined') ? CURRENT_EQUIPE : 'A';
-    // Construire le payload complet avec toutes les équipes
-    const payload = {
-      A: window.DB_A ? JSON.parse(JSON.stringify(window.DB_A)) : {},
-      B: window.DB_B ? JSON.parse(JSON.stringify(window.DB_B)) : {},
-      C: window.DB_C ? JSON.parse(JSON.stringify(window.DB_C)) : {},
-      D: window.DB_D ? JSON.parse(JSON.stringify(window.DB_D)) : {},
-    };
-    // Mettre à jour l'équipe active avec les données fraîches
+    const eq = getCurrentEquipe();
+    // ── CORRECTION COLLABORATIVE : on utilise setDoc avec merge:true
+    // et on ne sauvegarde QUE l'équipe active → les autres équipes ne sont pas écrasées.
+    const payload = {};
     payload[eq] = dbData;
     // Synchroniser aussi la variable globale DB_X de l'équipe active
-    if (window['DB_' + eq]) Object.assign(window['DB_' + eq], dbData);
-    setDoc(dbRef, payload).catch(err => {
+    window['DB_' + eq] = window['DB_' + eq] || {};
+    Object.assign(window['DB_' + eq], dbData);
+    setDoc(dbRef, payload, { merge: true }).catch(err => {
       console.error('Firebase write error:', err);
       _ignoreNext = Math.max(0, _ignoreNext - 1);
       showFirebaseBadge('\u26a0\ufe0f Erreur cloud \u2014 sauvegarde locale uniquement', true);
@@ -3049,6 +3052,7 @@ DB_C.dispo.forEach(r => { if (!r.lieuJ_initial) r.lieuJ_initial = r.lieuJ || '�
 DB_D.dispo.forEach(r => { if (!r.lieuJ_initial) r.lieuJ_initial = r.lieuJ || '—'; });
 
 let CURRENT_EQUIPE = 'A';
+window.CURRENT_EQUIPE = CURRENT_EQUIPE;
 
 function switchEquipe(eq) {
   if (eq === CURRENT_EQUIPE) return;
@@ -3064,6 +3068,7 @@ function switchEquipe(eq) {
   }
 
   CURRENT_EQUIPE = eq;
+  window.CURRENT_EQUIPE = eq;
   // Charger la DB de l'équipe cible (depuis la variable globale, qui est maintenant
   // à jour grâce aux snapshots Firebase ou aux saisies locales)
   const src = window['DB_' + eq] || (eq==='B' ? DB_B : eq==='C' ? DB_C : eq==='D' ? DB_D : DB_A);
