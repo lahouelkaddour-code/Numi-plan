@@ -1429,6 +1429,7 @@ function saveDispo() {
   const hor_str = document.getElementById('f-dispo-hor').value;
   let hor = 0;
   if (hor_str) { const [h,m] = hor_str.split(':').map(Number); hor = (h*60+m)/1440; }
+  const idx = parseInt(document.getElementById('dispo-edit-idx').value);
   const obj = {
     v, etat: document.getElementById('f-dispo-etat').value,
     type: document.getElementById('f-dispo-type').value,
@@ -1439,7 +1440,6 @@ function saveDispo() {
     lieuJ_initial: idx>=0 ? (DB.dispo[idx].lieuJ_initial || DB.dispo[idx].lieuJ || '—') : (document.getElementById('f-dispo-lieuJ').value.trim()||'—'),
     prog: document.getElementById('f-dispo-prog').value.trim()
   };
-  const idx = parseInt(document.getElementById('dispo-edit-idx').value);
   if (idx >= 0) DB.dispo[idx] = obj; else DB.dispo.push(obj);
   saveDB(); closeModal('modal-dispo'); renderDispo(); showToast('✅ Disponibilité enregistrée');
 }
