@@ -12,29 +12,27 @@
        (Firebase Console → Paramètres du projet → Vos applications)
      ═══════════════════════════════════════════════════════════════ -->
 <script type="module">
-  import { initializeApp }        from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  import { initializeApp }                          from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  // ──────────────────────────────────────────────
-  // 🔧 REMPLACEZ ICI avec votre propre config Firebase
-  // ──────────────────────────────────────────────
+  // ── Config Firebase Numi-Pro ──
   const firebaseConfig = {
-    apiKey:            "VOTRE_API_KEY",
+    apiKey:            "AIzaSyDA-loDmlfcdPC0es0sb6tiCM4JXP2VF24",
     authDomain:        "numi-pro.firebaseapp.com",
-    databaseURL:       "https://numi-pro-default-rtdb.europe-west1.firebasedatabase.app",
     projectId:         "numi-pro",
-    storageBucket:     "numi-pro.appspot.com",
-    messagingSenderId: "VOTRE_MESSAGING_SENDER_ID",
-    appId:             "VOTRE_APP_ID"
+    storageBucket:     "numi-pro.firebasestorage.app",
+    messagingSenderId: "438168275921",
+    appId:             "1:438168275921:web:5c7e1f64931706610baef0",
+    measurementId:     "G-DQEEKXEFHN"
   };
 
   // ──────────────────────────────────────────────
   // Initialisation Firebase
   // ──────────────────────────────────────────────
   const app    = initializeApp(firebaseConfig);
-  const fbDB   = getDatabase(app);
-  const dbRef  = ref(fbDB, 'numiplan/data');
-  const arcRef = ref(fbDB, 'numiplan/archives');
+  const fbDB   = getFirestore(app);
+  const dbRef  = doc(fbDB, 'numiplan', 'data');
+  const arcRef = doc(fbDB, 'numiplan', 'archives');
 
   let _fbReady   = false;   // true après le 1er chargement Firebase
   let _ignoreNext = false;  // évite la boucle écriture→lecture
@@ -42,9 +40,9 @@
   // ──────────────────────────────────────────────
   // LECTURE TEMPS RÉEL — appelée à chaque mise à jour distante
   // ──────────────────────────────────────────────
-  onValue(dbRef, (snapshot) => {
+  onSnapshot(dbRef, (snapshot) => {
     if (_ignoreNext) { _ignoreNext = false; return; }
-    const data = snapshot.val();
+    const data = snapshot.data();
     if (!data) return;   // base vide : on garde les données initiales
 
     // Mettre à jour l'objet DB global
@@ -73,8 +71,8 @@
   // ──────────────────────────────────────────────
   // LECTURE ARCHIVES TEMPS RÉEL
   // ──────────────────────────────────────────────
-  onValue(arcRef, (snapshot) => {
-    const data = snapshot.val();
+  onSnapshot(arcRef, (snapshot) => {
+    const data = snapshot.data();
     if (data && window.ARCHIVES !== undefined) {
       window.ARCHIVES = data;
       if (_fbReady && typeof renderArchives === 'function') renderArchives();
@@ -86,14 +84,14 @@
   // ──────────────────────────────────────────────
   window._firebaseSaveDB = function(dbData) {
     _ignoreNext = true;
-    set(dbRef, dbData).catch(err => {
+    setDoc(dbRef, dbData).catch(err => {
       console.error('Firebase write error:', err);
-      showFirebaseBadge('⚠️ Erreur cloud — sauvegarde locale uniquement', true);
+      showFirebaseBadge('\u26a0\ufe0f Erreur cloud \u2014 sauvegarde locale uniquement', true);
     });
   };
 
   window._firebaseSaveArchives = function(archivesData) {
-    set(arcRef, archivesData).catch(err => {
+    setDoc(arcRef, archivesData).catch(err => {
       console.error('Firebase archives write error:', err);
     });
   };
@@ -298,6 +296,78 @@ tbody td { padding:6px 8px; font-size:11px; vertical-align:middle; }
 </style>
 </head>
 <body>
+<!-- ═══════════════════════════════════════════════════════════════
+     ÉCRAN DE CONNEXION
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="login-screen" style="
+  position:fixed;inset:0;background:#0a0e1a;z-index:99999;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'IBM Plex Sans',sans-serif;">
+  <div style="
+    background:#111827;border:1px solid #2d3f65;border-radius:16px;
+    padding:40px 48px;width:380px;max-width:95vw;text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.8);">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:700;color:#38bdf8;margin-bottom:4px;">
+      NUMI-PLAN
+    </div>
+    <div style="font-size:10px;color:#94a3b8;letter-spacing:3px;text-transform:uppercase;margin-bottom:32px;">
+      Fiche Disponibilité · Accès sécurisé
+    </div>
+    <div style="margin-bottom:16px;text-align:left;">
+      <label style="font-size:10px;font-weight:700;letter-spacing:2px;color:#94a3b8;text-transform:uppercase;">
+        Mot de passe
+      </label>
+      <input id="pwd-input" type="password" placeholder="••••••••••••"
+        onkeydown="if(event.key==='Enter') checkPassword()"
+        style="
+          display:block;width:100%;margin-top:6px;padding:10px 14px;
+          background:#1a2236;border:1px solid #2d3f65;border-radius:8px;
+          color:#e2e8f0;font-size:14px;font-family:'IBM Plex Mono',monospace;
+          outline:none;box-sizing:border-box;">
+    </div>
+    <div id="pwd-error" style="color:#f87171;font-size:12px;margin-bottom:12px;min-height:18px;"></div>
+    <button onclick="checkPassword()" style="
+      width:100%;padding:11px;background:#38bdf8;color:#000;border:none;
+      border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;
+      font-family:'IBM Plex Sans',sans-serif;letter-spacing:1px;">
+      ACCÉDER →
+    </button>
+    <div style="margin-top:20px;font-size:10px;color:#475569;">
+      NUMI-PLAN · Accès réservé aux collaborateurs autorisés
+    </div>
+  </div>
+</div>
+
+<script>
+  // Vérifier si déjà connecté (session active)
+  if (sessionStorage.getItem('numiplan_auth') === 'ok') {
+    document.getElementById('login-screen').style.display = 'none';
+  }
+
+  function checkPassword() {
+    const val = document.getElementById('pwd-input').value;
+    if (val === 'Sharik@2026') {
+      sessionStorage.setItem('numiplan_auth', 'ok');
+      document.getElementById('login-screen').style.display = 'none';
+    } else {
+      document.getElementById('pwd-error').textContent = '⚠️ Mot de passe incorrect';
+      document.getElementById('pwd-input').value = '';
+      document.getElementById('pwd-input').focus();
+      setTimeout(() => {
+        document.getElementById('pwd-error').textContent = '';
+      }, 3000);
+    }
+  }
+
+  // Focus automatique sur le champ
+  window.addEventListener('load', () => {
+    if (sessionStorage.getItem('numiplan_auth') !== 'ok') {
+      setTimeout(() => document.getElementById('pwd-input').focus(), 100);
+    }
+  });
+</script>
+
+
 
 <div class="header">
   <div>
